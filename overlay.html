@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Gamepad Overlay</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --paw:#d4967e;--paw-dk:#c4866e;--ear-pink:#f0a0b8;--nose-pink:#f0a0b0;
+  --fur:#3a3a3a;--fur-lt:#4a4a4a;--fur-dk:#2d2d2d;
+  --ctrl:#1e1e1e;--ctrl-lt:#2a2a2a;--ctrl-st:#333;
+  --glow-blue:rgba(125,211,252,.4);
+}
+html,body{
+  background:transparent;overflow:hidden;
+  width:100%;height:100%;user-select:none;
+  font-family:'Segoe UI',-apple-system,system-ui,sans-serif;cursor:default;
+}
+html.preview{background:#1a1a2e}
+body.dragging{cursor:grabbing}
+
+.ctrl-btns{position:absolute;top:3px;right:4px;display:flex;gap:3px;z-index:20}
+.ctrl-btns button{
+  width:20px;height:20px;border:none;border-radius:50%;font-size:10px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  background:rgba(60,60,60,.3);color:#999;transition:all .15s;line-height:1;
+}
+.ctrl-btns button:hover{background:rgba(60,60,60,.5)}
+.ctrl-btns button.locked{background:#e879a8;color:#fff}
+.lock-glow{position:absolute;inset:0;pointer-events:none;border:2px solid transparent;border-radius:8px;transition:border-color .3s}
+.lock-glow.on{border-color:rgba(232,121,168,.35)}
+.det-badge{position:absolute;top:4px;left:6px;font-size:8px;font-weight:700;color:#888;letter-spacing:.04em;opacity:.6;pointer-events:none}
+.canvas{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:2px 4px 4px}
+.canvas svg{width:100%;height:100%}
+.no-gp{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:100%;color:#888;font-size:11px;text-align:center;animation:breathe 2.5s ease-in-out infinite}
+.no-gp .icon{font-size:36px;opacity:.5}
+.no-gp .hint{font-size:9px;color:#666;opacity:.7}
+@keyframes breathe{0%,100%{opacity:.8}50%{opacity:.35}}
+
+/* ===== CAT SVG STYLES ===== */
+#ear-l,#ear-r{transition:transform .1s ease-out;transform-box:view-box}
+#ear-l{transform-origin:182px 55px}
+#ear-r{transform-origin:258px 55px}
+.eo{transition:opacity .06s}
+.ec{opacity:0;transition:opacity .06s}
+.tail-g{transform-origin:300px 120px;transform-box:view-box;animation:sway 3s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:rotate(0)}50%{transform:rotate(5deg)}}
+.ctrl-body{fill:var(--ctrl);stroke:var(--ctrl-st);stroke-width:1.5}
+.ctrl-tp{fill:var(--ctrl-lt);stroke:#3a3a3a;stroke-width:1;transition:all .06s}
+.ctrl-tp.p{fill:#3a3a3a}
+.light-bar{fill:#7dd3fc;opacity:.6;filter:drop-shadow(0 0 6px var(--glow-blue))}
+.bumper{fill:var(--ctrl-lt);stroke:var(--ctrl-st);stroke-width:1;transition:all .06s;rx:3}
+.bumper.p{fill:#4a4a4a;stroke:#666}
+.fb{transition:transform .06s cubic-bezier(.34,1.56,.64,1);transform-origin:center;transform-box:fill-box}
+.fb.p{transform:scale(1.18)}
+.fb .ring{stroke-width:2;fill:var(--ctrl);transition:all .06s}
+.fb.p .ring{stroke-width:3;filter:drop-shadow(0 0 5px var(--btn-c))}
+.fb-lbl{font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.dp-cross{fill:#252525;stroke:var(--ctrl-st);stroke-width:1}
+.dp-dir{fill:transparent;transition:fill .06s}
+.dp-dir.p{fill:rgba(212,150,126,.35)}
+.stick-cap{fill:var(--ctrl-lt);stroke:#3a3a3a;stroke-width:1.5;transition:all .03s}
+.stick-lbl{fill:#555;font-size:7px;font-weight:700;text-anchor:middle}
+.cbtn{fill:var(--ctrl-lt);stroke:var(--ctrl-st);stroke-width:1;transition:all .06s}
+.cbtn.p{fill:#4a4a4a;stroke:#555}
+.cbtn-lbl{fill:#777;font-size:5px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.btn-lbl{fill:#888;font-size:6px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.trig-val{fill:#666;font-size:7px;font-weight:600;text-anchor:middle;font-family:'Cascadia Code','SF Mono',monospace}
+.status-txt{fill:#555;font-size:6.5px;text-anchor:middle;font-weight:600}
+</style>
+</head>
+<body>
+<div class="ctrl-btns">
+  <button id="lockBtn" title="Lock (Ctrl+Shift+G)">🔓</button>
+</div>
+<div class="lock-glow" id="lockGlow"></div>
+<div class="det-badge" id="detBadge"></div>
+<div class="canvas" id="canvas">
+  <div class="no-gp" id="no-gp">
+    <div class="icon">🐱</div>
+    <div>连接手柄后按任意键</div>
+    <div class="hint">右键按住拖动 · Ctrl+Shift+G 锁定</div>
+  </div>
+</div>
+
+<script>
+// ==================== DETECTION ====================
+const DETECT=[
+  {type:'ps5',patterns:[/dualsense/i,/054c:0ce6/i,/054c:0df2/i]},
+  {type:'ps4',patterns:[/dualshock\s*4/i,/054c:05c4/i,/054c:09cc/i,/054c:0ba0/i,/playstation.*wireless/i]},
+  {type:'ps4',patterns:[/054c:/i,/sony/i,/playstation/i,/dualshock/i]},
+  {type:'switch',patterns:[/pro\s*controller/i,/057e:/i,/nintendo/i,/switch/i,/joy.?con/i]},
+  {type:'xbox',patterns:[/xbox/i,/xinput/i,/045e:/i,/microsoft/i]},
+  {type:'xbox',patterns:[/8bitdo/i,/gamesir/i,/razer/i,/logitech/i,/steelseries/i,/hori/i,/powera/i]},
+];
+function detectType(id){for(const r of DETECT)for(const p of r.patterns)if(p.test(id||''))return r.type;return 'xbox'}
+function detectLabel(type,id){
+  const s=(id||'').toLowerCase();
+  if(type==='ps5')return'PS5 DualSense';if(type==='ps4')return/dualshock/i.test(s)?'PS4 DualShock':'PlayStation';
+  if(type==='switch')return/joy.?con/i.test(s)?'Joy-Con':'Switch Pro';
+  if(/xbox.*series/i.test(s))return'Xbox Series';if(/xbox.*one/i.test(s))return'Xbox One';
+  if(/8bitdo/i.test(s))return'8BitDo';return'Xbox';
+}
+
+// ==================== CONFIG ====================
+const CFG={
+  xbox:{
+    face:['A','B','X','Y'],fCol:['#5ec26e','#f87171','#60a5fa','#fbbf24'],
+    tl:'LT',tr:'RT',bl:'LB',br:'RB',center:['View','⊞','Menu'],hasTP:false,
+  },
+  ps4:{
+    face:['×','○','□','△'],fCol:['#60a5fa','#fb7185','#c084fc','#6ee7b7'],
+    tl:'L2',tr:'R2',bl:'L1',br:'R1',center:['Share','PS','Opt'],hasTP:true,
+  },
+  ps5:{
+    face:['×','○','□','△'],fCol:['#60a5fa','#fb7185','#c084fc','#6ee7b7'],
+    tl:'L2',tr:'R2',bl:'L1',br:'R1',center:['Create','PS','Opt'],hasTP:true,
+  },
+  switch:{
+    face:['B','A','Y','X'],fCol:['#f87171','#5ec26e','#fbbf24','#60a5fa'],
+    tl:'ZL',tr:'ZR',bl:'L',br:'R',center:['−','⌂','+'],hasTP:false,
+  },
+};
+
+let curType='xbox',gpIdx=null,connected={};
+
+// ==================== SVG BUILDER ====================
+function buildCatSVG(type){
+  const C=CFG[type];
+  const W=440,H=310;
+  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // ===== TAIL =====
+  s+=`<g class="tail-g">`;
+  s+=`<path d="M 298,118 C 325,100 355,65 375,40 C 382,30 388,25 392,32 C 396,40 388,58 375,75 C 355,100 330,118 308,125" fill="var(--fur)"/>`;
+  s+=`<path d="M 375,40 C 385,25 392,22 395,30 C 398,38 392,52 385,62" fill="var(--fur)"/>`;
+  s+=`</g>`;
+
+  // ===== CAT BODY =====
+  s+=`<ellipse cx="220" cy="142" rx="70" ry="20" fill="var(--fur)"/>`;
+
+  // ===== CONTROLLER BODY =====
+  s+=`<path class="ctrl-body" d="
+    M 120,155 C 120,148 160,140 220,140 C 280,140 320,148 320,155
+    L 326,178 C 338,185 352,200 360,218
+    L 374,262 C 380,278 377,296 366,304 C 355,312 340,308 332,296
+    L 314,252 C 306,236 280,228 220,228
+    C 160,228 134,236 126,252
+    L 108,296 C 100,308 85,312 74,304 C 63,296 60,278 66,262
+    L 80,218 C 88,200 102,185 114,178 Z"/>`;
+
+  // ===== CAT HEAD =====
+  // Left ear (LT)
+  s+=`<g id="ear-l">`;
+  s+=`<path d="M 172,55 L 148,5 L 200,38 Z" fill="var(--fur)"/>`;
+  s+=`<path d="M 176,50 L 156,14 L 196,40 Z" fill="var(--ear-pink)"/>`;
+  s+=`</g>`;
+  // Right ear (RT)
+  s+=`<g id="ear-r">`;
+  s+=`<path d="M 268,55 L 292,5 L 240,38 Z" fill="var(--fur)"/>`;
+  s+=`<path d="M 264,50 L 284,14 L 244,40 Z" fill="var(--ear-pink)"/>`;
+  s+=`</g>`;
+
+  // Head
+  s+=`<ellipse cx="220" cy="80" rx="56" ry="50" fill="var(--fur)"/>`;
+  s+=`<ellipse cx="195" cy="90" rx="18" ry="12" fill="var(--fur-lt)" opacity=".25"/>`;
+  s+=`<ellipse cx="245" cy="90" rx="18" ry="12" fill="var(--fur-lt)" opacity=".25"/>`;
+
+  // Left eye (LB)
+  s+=`<g id="eye-l">`;
+  s+=`<g class="eo">`;
+  s+=`<ellipse cx="198" cy="74" rx="14" ry="16" fill="#fff"/>`;
+  s+=`<ellipse cx="199" cy="76" rx="10" ry="12" fill="#d4a040"/>`;
+  s+=`<ellipse cx="199" cy="80" rx="8" ry="7" fill="#c08830" opacity=".35"/>`;
+  s+=`<ellipse cx="199" cy="76" rx="5" ry="6.5" fill="#1a1a1a"/>`;
+  s+=`<circle cx="204" cy="69" r="3.5" fill="#fff"/>`;
+  s+=`<circle cx="194" cy="72" r="2" fill="#fff" opacity=".7"/>`;
+  s+=`<circle cx="202" cy="67" r="1.2" fill="#fff"/>`;
+  s+=`</g>`;
+  s+=`<path class="ec" d="M 184,77 Q 198,65 212,77" stroke="#555" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  s+=`</g>`;
+
+  // Right eye (RB)
+  s+=`<g id="eye-r">`;
+  s+=`<g class="eo">`;
+  s+=`<ellipse cx="242" cy="74" rx="14" ry="16" fill="#fff"/>`;
+  s+=`<ellipse cx="241" cy="76" rx="10" ry="12" fill="#d4a040"/>`;
+  s+=`<ellipse cx="241" cy="80" rx="8" ry="7" fill="#c08830" opacity=".35"/>`;
+  s+=`<ellipse cx="241" cy="76" rx="5" ry="6.5" fill="#1a1a1a"/>`;
+  s+=`<circle cx="246" cy="69" r="3.5" fill="#fff"/>`;
+  s+=`<circle cx="236" cy="72" r="2" fill="#fff" opacity=".7"/>`;
+  s+=`<circle cx="244" cy="67" r="1.2" fill="#fff"/>`;
+  s+=`</g>`;
+  s+=`<path class="ec" d="M 228,77 Q 242,65 256,77" stroke="#555" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  s+=`</g>`;
+
+  // Nose
+  s+=`<path d="M 220,96 L 215,102 Q 220,104 225,102 Z" fill="var(--nose-pink)"/>`;
+  // Mouth
+  s+=`<path d="M 212,105 Q 216,110 220,105 Q 224,110 228,105" stroke="#555" stroke-width="1.2" fill="none"/>`;
+
+  // Whiskers
+  s+=`<g class="whiskers-l">`;
+  s+=`<line x1="186" y1="95" x2="145" y2="88" stroke="#555" stroke-width=".8"/>`;
+  s+=`<line x1="186" y1="98" x2="143" y2="98" stroke="#555" stroke-width=".8"/>`;
+  s+=`<line x1="186" y1="101" x2="145" y2="108" stroke="#555" stroke-width=".8"/>`;
+  s+=`</g>`;
+  s+=`<g class="whiskers-r">`;
+  s+=`<line x1="254" y1="95" x2="295" y2="88" stroke="#555" stroke-width=".8"/>`;
+  s+=`<line x1="254" y1="98" x2="297" y2="98" stroke="#555" stroke-width=".8"/>`;
+  s+=`<line x1="254" y1="101" x2="295" y2="108" stroke="#555" stroke-width=".8"/>`;
+  s+=`</g>`;
+
+  // ===== PAWS =====
+  s+=`<ellipse cx="150" cy="148" rx="15" ry="11" fill="var(--fur)" transform="rotate(-12 150 148)"/>`;
+  s+=`<circle cx="148" cy="150" r="4.5" fill="var(--paw)" opacity=".7"/>`;
+  s+=`<circle cx="143" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
+  s+=`<circle cx="148" cy="142" r="2.2" fill="var(--paw)" opacity=".6"/>`;
+  s+=`<circle cx="153" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
+  s+=`<ellipse cx="290" cy="148" rx="15" ry="11" fill="var(--fur)" transform="rotate(12 290 148)"/>`;
+  s+=`<circle cx="292" cy="150" r="4.5" fill="var(--paw)" opacity=".7"/>`;
+  s+=`<circle cx="287" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
+  s+=`<circle cx="292" cy="142" r="2.2" fill="var(--paw)" opacity=".6"/>`;
+  s+=`<circle cx="297" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
+
+  // ===== CONTROLLER DETAILS =====
+  if(C.hasTP) s+=`<rect x="192" y="148" width="56" height="3" rx="1.5" class="light-bar"/>`;
+
+  // Touchpad
+  s+=`<rect x="187" y="155" width="66" height="26" rx="4" class="ctrl-tp" id="btn-17"/>`;
+  s+=`<circle cx="220" cy="165" r="5.5" fill="none" stroke="#3a3a3a" stroke-width=".8"/>`;
+  s+=`<circle cx="217" cy="163" r="1" fill="#444"/>`;
+  s+=`<circle cx="223" cy="163" r="1" fill="#444"/>`;
+  s+=`<path d="M 218,167 L 220,169 L 222,167" stroke="#444" stroke-width=".6" fill="none"/>`;
+
+  // Bumpers
+  s+=`<rect x="128" y="147" width="38" height="10" class="bumper" id="bmp-4"/>`;
+  s+=`<text x="147" y="153" class="btn-lbl">${C.bl}</text>`;
+  s+=`<rect x="274" y="147" width="38" height="10" class="bumper" id="bmp-5"/>`;
+  s+=`<text x="293" y="153" class="btn-lbl">${C.br}</text>`;
+
+  // Trigger labels
+  s+=`<text x="142" y="16" class="trig-val" id="lt-val">${C.tl} 0.00</text>`;
+  s+=`<text x="298" y="16" class="trig-val" id="rt-val">${C.tr} 0.00</text>`;
+
+  // D-pad
+  const dpx=148,dpy=212;
+  s+=`<path d="M ${dpx-8},${dpy-23} L ${dpx+8},${dpy-23} L ${dpx+8},${dpy-8}
+    L ${dpx+23},${dpy-8} L ${dpx+23},${dpy+8} L ${dpx+8},${dpy+8}
+    L ${dpx+8},${dpy+23} L ${dpx-8},${dpy+23} L ${dpx-8},${dpy+8}
+    L ${dpx-23},${dpy+8} L ${dpx-23},${dpy-8} L ${dpx-8},${dpy-8} Z" class="dp-cross"/>`;
+  s+=`<rect x="${dpx-8}" y="${dpy-23}" width="16" height="16" rx="2" class="dp-dir" id="dp-12"/>`;
+  s+=`<rect x="${dpx-8}" y="${dpy+7}" width="16" height="16" rx="2" class="dp-dir" id="dp-13"/>`;
+  s+=`<rect x="${dpx-23}" y="${dpy-8}" width="16" height="16" rx="2" class="dp-dir" id="dp-14"/>`;
+  s+=`<rect x="${dpx+7}" y="${dpy-8}" width="16" height="16" rx="2" class="dp-dir" id="dp-15"/>`;
+  const dirs=[{cx:dpx,cy:dpy-14,id:12},{cx:dpx,cy:dpy+14,id:13},{cx:dpx-14,cy:dpy,id:14},{cx:dpx+14,cy:dpy,id:15}];
+  for(const d of dirs){
+    s+=`<circle cx="${d.cx}" cy="${d.cy}" r="3.2" fill="var(--paw)" opacity=".45" class="dpp dpp-${d.id}"/>`;
+    s+=`<circle cx="${d.cx-2.5}" cy="${d.cy-3.5}" r="1.3" fill="var(--paw)" opacity=".35" class="dpp dpp-${d.id}"/>`;
+    s+=`<circle cx="${d.cx}" cy="${d.cy-4.5}" r="1.3" fill="var(--paw)" opacity=".35" class="dpp dpp-${d.id}"/>`;
+    s+=`<circle cx="${d.cx+2.5}" cy="${d.cy-3.5}" r="1.3" fill="var(--paw)" opacity=".35" class="dpp dpp-${d.id}"/>`;
+  }
+  s+=`<circle cx="${dpx}" cy="${dpy}" r="3" fill="#2a2a2a"/>`;
+
+  // Face buttons
+  const fbx=302,fby=198;
+  const fbOff=[[0,15],[15,0],[-15,0],[0,-15]];
+  for(let i=0;i<4;i++){
+    const cx=fbx+fbOff[i][0],cy=fby+fbOff[i][1];
+    s+=`<g class="fb" id="f-${i}" style="--btn-c:${C.fCol[i]}">`;
+    s+=`<circle cx="${cx}" cy="${cy}" r="11" class="ring" stroke="${C.fCol[i]}"/>`;
+    s+=`<text x="${cx}" y="${cy}" class="fb-lbl" fill="${C.fCol[i]}">${C.face[i]}</text>`;
+    s+=`</g>`;
+  }
+
+  // Sticks
+  const stks=[{cx:178,cy:250,id:'ls'},{cx:262,cy:250,id:'rs'}];
+  for(const st of stks){
+    s+=`<circle cx="${st.cx}" cy="${st.cy}" r="19" fill="#1a1a1a" stroke="var(--ctrl-st)" stroke-width="1"/>`;
+    s+=`<g id="${st.id}-g">`;
+    s+=`<circle cx="${st.cx}" cy="${st.cy}" r="15" class="stick-cap"/>`;
+    s+=`<circle cx="${st.cx}" cy="${st.cy+1}" r="5" fill="var(--paw)" opacity=".6" id="${st.id}-pad"/>`;
+    s+=`<circle cx="${st.cx-4}" cy="${st.cy-4}" r="2.2" fill="var(--paw)" opacity=".5" id="${st.id}-t0"/>`;
+    s+=`<circle cx="${st.cx}" cy="${st.cy-6}" r="2.2" fill="var(--paw)" opacity=".5" id="${st.id}-t1"/>`;
+    s+=`<circle cx="${st.cx+4}" cy="${st.cy-4}" r="2.2" fill="var(--paw)" opacity=".5" id="${st.id}-t2"/>`;
+    s+=`</g>`;
+    s+=`<text x="${st.cx}" y="${st.cy+28}" class="stick-lbl">${st.id==='ls'?'L':'R'}</text>`;
+  }
+
+  // Center buttons
+  s+=`<rect x="186" y="194" width="18" height="8" rx="4" class="cbtn" id="btn-8"/>`;
+  s+=`<text x="195" y="198" class="cbtn-lbl">${C.center[0]}</text>`;
+  s+=`<rect x="236" y="194" width="18" height="8" rx="4" class="cbtn" id="btn-9"/>`;
+  s+=`<text x="245" y="198" class="cbtn-lbl">${C.center[2]}</text>`;
+  s+=`<circle cx="220" cy="232" r="7" class="cbtn" id="btn-16"/>`;
+  s+=`<text x="220" y="232" class="cbtn-lbl" style="font-size:6px">${C.center[1]}</text>`;
+
+  s+=`<text x="220" y="${H-4}" class="status-txt" id="gp-status"></text>`;
+  s+=`</svg>`;
+  return s;
+}
+
+// ==================== DOM ====================
+const canvas=document.getElementById('canvas');
+const noGp=document.getElementById('no-gp');
+const lockBtn=document.getElementById('lockBtn');
+const lockGlow=document.getElementById('lockGlow');
+const detBadge=document.getElementById('detBadge');
+let isLocked=false;
+
+function setType(t){
+  curType=t;
+  noGp.style.display='none';
+  let c=document.getElementById('svg-wrap');
+  if(!c){c=document.createElement('div');c.id='svg-wrap';
+    c.style.cssText='width:100%;height:100%;display:flex;align-items:center;justify-content:center';
+    canvas.appendChild(c);}
+  c.innerHTML=buildCatSVG(t);
+}
+
+lockBtn.addEventListener('click',()=>{
+  isLocked=!isLocked;
+  lockBtn.textContent=isLocked?'🔒':'🔓';
+  lockBtn.classList.toggle('locked',isLocked);
+  lockGlow.classList.toggle('on',isLocked);
+  if(window.overlay) window.overlay.setClickThrough(isLocked);
+});
+if(window.overlay){
+  window.overlay.onClickThroughChanged(v=>{
+    isLocked=v;lockBtn.textContent=v?'🔒':'🔓';
+    lockBtn.classList.toggle('locked',v);lockGlow.classList.toggle('on',v);
+  });
+}
+
+// ==================== RIGHT-CLICK DRAG ====================
+let dragging=false;
+document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('mousedown',e=>{if(e.button!==2)return;dragging=true;document.body.classList.add('dragging');
+  if(window.overlay)window.overlay.startDrag(e.screenX,e.screenY);});
+document.addEventListener('mousemove',e=>{if(!dragging)return;if(window.overlay)window.overlay.dragMove(e.screenX,e.screenY);});
+document.addEventListener('mouseup',e=>{if(e.button!==2||!dragging)return;dragging=false;document.body.classList.remove('dragging');
+  if(window.overlay)window.overlay.dragEnd();});
+
+// ==================== GAMEPAD ====================
+window.addEventListener('gamepadconnected',e=>{
+  connected[e.gamepad.index]=true;
+  if(gpIdx===null)gpIdx=e.gamepad.index;
+  const t=detectType(e.gamepad.id);
+  detBadge.textContent=detectLabel(t,e.gamepad.id);
+  setType(t);
+});
+window.addEventListener('gamepaddisconnected',e=>{
+  delete connected[e.gamepad.index];
+  if(gpIdx===e.gamepad.index){const k=Object.keys(connected).map(Number);gpIdx=k.length?k[0]:null;}
+  if(gpIdx===null){noGp.style.display='';detBadge.textContent='';
+    const w=document.getElementById('svg-wrap');if(w)w.remove();
+  } else {const gp=navigator.getGamepads()[gpIdx];
+    if(gp){const t=detectType(gp.id);detBadge.textContent=detectLabel(t,gp.id);setType(t);}}
+});
+
+// ==================== STICK UPDATE ====================
+function updatePaw(id,ax,ay){
+  const pad=document.getElementById(id+'-pad');
+  if(!pad)return;
+  const cx=id==='ls'?178:262, cy=250, range=10;
+  const mx=cx+ax*range, my=cy+ay*range;
+  pad.setAttribute('cx',mx);pad.setAttribute('cy',my+1);
+  const t0=document.getElementById(id+'-t0');
+  const t1=document.getElementById(id+'-t1');
+  const t2=document.getElementById(id+'-t2');
+  if(t0){t0.setAttribute('cx',mx-4);t0.setAttribute('cy',my-4);}
+  if(t1){t1.setAttribute('cx',mx);t1.setAttribute('cy',my-6);}
+  if(t2){t2.setAttribute('cx',mx+4);t2.setAttribute('cy',my-4);}
+}
+
+// ==================== MAIN LOOP ====================
+function loop(){
+  requestAnimationFrame(loop);
+  if(gpIdx===null)return;
+  const gp=navigator.getGamepads()[gpIdx];
+  if(!gp)return;
+  const C=CFG[curType];
+
+  const st=document.getElementById('gp-status');
+  if(st)st.textContent=gp.id.length>36?gp.id.slice(0,36)+'…':gp.id;
+
+  for(let i=0;i<4;i++){const el=document.getElementById(`f-${i}`);if(el)el.classList.toggle('p',gp.buttons[i]?.pressed)}
+
+  const eyeL=document.getElementById('eye-l');
+  const eyeR=document.getElementById('eye-r');
+  if(eyeL){
+    const lb=gp.buttons[4]?.pressed;
+    eyeL.querySelector('.eo').style.opacity=lb?'0':'1';
+    eyeL.querySelector('.ec').style.opacity=lb?'1':'0';
+  }
+  if(eyeR){
+    const rb=gp.buttons[5]?.pressed;
+    eyeR.querySelector('.eo').style.opacity=rb?'0':'1';
+    eyeR.querySelector('.ec').style.opacity=rb?'1':'0';
+  }
+  const bL=document.getElementById('bmp-4'),bR=document.getElementById('bmp-5');
+  if(bL)bL.classList.toggle('p',gp.buttons[4]?.pressed);
+  if(bR)bR.classList.toggle('p',gp.buttons[5]?.pressed);
+
+  const lt=gp.buttons[6]?.value||0, rt=gp.buttons[7]?.value||0;
+  const earL=document.getElementById('ear-l'),earR=document.getElementById('ear-r');
+  if(earL)earL.style.transform=`rotate(${-lt*25}deg)`;
+  if(earR)earR.style.transform=`rotate(${rt*25}deg)`;
+  const ltV=document.getElementById('lt-val'),rtV=document.getElementById('rt-val');
+  if(ltV)ltV.textContent=`${C.tl} ${lt.toFixed(2)}`;
+  if(rtV)rtV.textContent=`${C.tr} ${rt.toFixed(2)}`;
+
+  for(const bi of [8,9,16,17]){const el=document.getElementById(`btn-${bi}`);if(el&&gp.buttons[bi])el.classList.toggle('p',gp.buttons[bi].pressed)}
+
+  const lsPad=document.getElementById('ls-pad'),rsPad=document.getElementById('rs-pad');
+  if(lsPad&&gp.buttons[10])lsPad.setAttribute('r',gp.buttons[10].pressed?'7':'5');
+  if(rsPad&&gp.buttons[11])rsPad.setAttribute('r',gp.buttons[11].pressed?'7':'5');
+
+  for(let i=12;i<=15;i++){
+    const el=document.getElementById(`dp-${i}`);
+    const p=gp.buttons[i]?.pressed;
+    if(el)el.classList.toggle('p',p);
+    document.querySelectorAll(`.dpp-${i}`).forEach(pw=>pw.setAttribute('opacity',p?'1':'.45'));
+  }
+
+  if(gp.axes.length>=2)updatePaw('ls',gp.axes[0],gp.axes[1]);
+  if(gp.axes.length>=4)updatePaw('rs',gp.axes[2],gp.axes[3]);
+}
+requestAnimationFrame(loop);
+
+// ==================== INIT ====================
+if(!window.overlay){
+  document.documentElement.classList.add('preview');
+  setType('xbox');
+  const bar=document.createElement('div');
+  bar.style.cssText='position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:99';
+  ['xbox','ps4','ps5','switch'].forEach(t=>{
+    const b=document.createElement('button');b.textContent=t.toUpperCase();
+    b.style.cssText='padding:4px 12px;border:1px solid #444;border-radius:6px;background:#2a2a3e;color:#ddd;cursor:pointer;font-size:11px;font-weight:600';
+    b.onclick=()=>setType(t);bar.appendChild(b);
+  });
+  document.body.appendChild(bar);
+} else {
+  noGp.style.display='';
+}
+</script>
+</body>
+</html>

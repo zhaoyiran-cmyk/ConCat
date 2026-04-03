@@ -1,0 +1,11 @@
+node_modules/
+dist/
+release/
+build-out/
+build-out2/
+out/
+*.exe
+*.blockmap
+*.yaml
+.DS_Store
+Thumbs.db

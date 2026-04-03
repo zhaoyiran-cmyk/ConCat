@@ -1,0 +1,53 @@
+{
+  "name": "con-cat",
+  "version": "1.0.0",
+  "description": "ConCat - Cute cat gamepad overlay for gaming",
+  "author": "ConCat",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.concat.overlay",
+    "productName": "ConCat",
+    "copyright": "Copyright © 2026 ConCat",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false,
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "shortcutName": "ConCat"
+    },
+    "portable": {
+      "artifactName": "ConCat-${version}-Portable.exe"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "overlay.html"
+    ],
+    "directories": {
+      "output": "build-out2"
+    }
+  }
+}
