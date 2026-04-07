@@ -13,7 +13,17 @@ html,body{
 html.preview{background:#1a1a2e}
 body.dragging{cursor:grabbing}
 
-.ctrl-btns{position:absolute;top:3px;right:4px;display:flex;gap:3px;z-index:200}
+.ctrl-strip{
+  position:absolute;top:0;left:0;right:0;height:32px;z-index:200;display:flex;
+  align-items:flex-start;justify-content:flex-end;box-sizing:border-box;padding:3px 4px 0;pointer-events:none;
+}
+.ctrl-strip-spacer{flex:1;min-width:0;align-self:stretch}
+body.ct-through .ctrl-strip{pointer-events:auto}
+body.ct-through .scene{pointer-events:none}
+body.ct-through .scene img.editable,
+body.ct-through .scene .op-counter.editable{pointer-events:auto!important}
+body.ct-through #noGp{pointer-events:auto}
+.ctrl-btns{display:flex;gap:3px;flex-shrink:0}
 .ctrl-btns button{
   width:20px;height:20px;border:none;border-radius:50%;font-size:10px;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -68,30 +78,17 @@ body.dragging{cursor:grabbing}
 .tail-anim{animation:tail-idle 3s ease-in-out infinite}
 .tail-anim.active{animation:tail-wag .35s ease-in-out infinite}
 
-/* 方法一：eye_* 素材是「闭眼/眼皮」图；猫头底图自带睁眼。常态隐藏眼皮，仅 .blinking 时短暂盖住眼睛 */
+/* eye_* 为眼睑图；猫头底图睁眼。常态隐藏眼睑，.blinking 时整块显示，无过渡动画 */
 .cat-face-wrap{overflow:visible}
 .cat-eye{
   z-index:3;object-fit:contain;
-  transform-origin:50% 52%;
   opacity:0;
   pointer-events:none;
 }
-/* F2 编辑时要能看见眼皮图层以便对齐 */
 .cat-eye.cat-eye-edit{opacity:1}
-.cat-eye.blinking{
-  animation:cat-blink .26s ease-in-out;
-  animation-fill-mode:forwards;
-}
-@keyframes cat-blink{
-  0%{opacity:0;transform:scaleY(0.12)}
-  12%{opacity:1;transform:scaleY(0.12)}
-  38%{opacity:1;transform:scaleY(1)}
-  58%{opacity:1;transform:scaleY(0.12)}
-  88%{opacity:1;transform:scaleY(0.12)}
-  100%{opacity:0;transform:scaleY(0.12)}
-}
+.cat-eye.blinking{opacity:1}
 @media (prefers-reduced-motion:reduce){
-  .cat-eye.blinking{animation:none;opacity:0}
+  .cat-eye.blinking{opacity:0}
 }
 
 /* ===== EDITOR MODE ===== */
@@ -208,8 +205,11 @@ body.dragging{cursor:grabbing}
 </style>
 </head>
 <body>
-<div class="ctrl-btns">
-  <button id="lockBtn" title="Lock (Ctrl+Shift+G)">🔓</button>
+<div class="ctrl-strip" id="ctrlStrip">
+  <span class="ctrl-strip-spacer" aria-hidden="true"></span>
+  <div class="ctrl-btns">
+    <button id="lockBtn" title="锁定后：移回顶部栏可点解锁，或托盘/Ctrl+Shift+G">🔓</button>
+  </div>
 </div>
 <div class="lock-glow" id="lockGlow"></div>
 <div class="det-badge" id="detBadge"></div>
@@ -217,8 +217,10 @@ body.dragging{cursor:grabbing}
 <div id="noGp" class="no-gp">
   <div class="icon">🐱</div>
   <div>连接手柄或按键盘启动</div>
-  <div class="hint">键盘: WASD=左摇杆 · 小键盘=右摇杆 · IJKL=△○□× · ↑↓←→=方向键</div>
-  <div class="hint">QE=L1R1 · 12=L2R2 · ZX=L3R3 · T=触摸板 · H=Home · Tab/BS=Share/Opt</div>
+  <div class="hint">键盘: WASD=左摇杆 · W 同时作为十字键上 · QWER=十字键（Q左 W上 E右 R下）</div>
+  <div class="hint">JKL;=△○□× · UI=L1R1 · TY=L2R2 · ZX=L3R3 · G=触摸板 · H=Home · Tab/BS=Share/Opt</div>
+  <div class="hint" style="opacity:.78">加键: 方向键/小键盘8426=右摇杆 · VBNM=面键备用 · FC=肩键备用 · 数字12=扳机备用 · []=L3R3备用 · 斜杠/引号/重音符=Share/Option/Home · P=触摸板 · 空格=Home</div>
+  <div class="hint" style="opacity:.65">桌面版：按键由系统键盘钩子驱动（与焦点无关）；插着手柄时键盘会与手柄显示合并。</div>
   <div class="hint" style="margin-top:2px;opacity:.85">当前发行线：<b style="color:#f0a0b8">索尼 DS4 / PlayStation 布局</b> · Xbox / Switch / 键盘专版规划中</div>
   <div class="hint" style="margin-top:4px;color:#f0a0b8">F2 = 布局编辑器（全局快捷键，无需点中窗口）</div>
   <div class="hint" style="margin-top:2px;opacity:.75">连接手柄或键盘模拟后显示「操作 N 次」；<strong>F2</strong> 可选中「操作计数器」拖动位置，滚轮/Ctrl+方向键调宽高（字号随高度变化）</div>
@@ -319,6 +321,7 @@ const noGp=document.getElementById('noGp');
 const lockBtn=document.getElementById('lockBtn');
 const lockGlow=document.getElementById('lockGlow');
 const detBadge=document.getElementById('detBadge');
+const ctxMenu=document.getElementById('ctxMenu');
 
 function mk(id,src,pos,cls,extra){
   const img=document.createElement('img');
@@ -451,32 +454,41 @@ window.addEventListener('resize',fitScene);
 
 let curType='xbox',gpIdx=null,connected={},isLocked=false;
 
-const BLINK_ANIM_MS=260;
+const BLINK_HOLD_MS=120;
 const BLINK_KB_INTERVAL_MS=10000;
 let blinkBusy=false;
+let blinkBusyL=false,blinkBusyR=false;
 let kbBlinkInterval=null;
-let prevShoulderL=false,prevShoulderR=false;
+let prevTrigBlinkL=0,prevTrigBlinkR=0;
 function blinkMotionOk(){
   try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(_){return true}
 }
-/** 方法一：单次眨眼（动画时长 BLINK_ANIM_MS）；肩键沿触发 + 键盘活跃时每 10s */
+/** L2/R2 按下沿：只闭对应侧眼睑 */
+function triggerBlinkEye(side){
+  if(editorOn||!blinkMotionOk())return;
+  if(side==='L'){
+    if(blinkBusyL||!E.eyeL)return;
+    blinkBusyL=true;
+    E.eyeL.classList.add('blinking');
+    setTimeout(()=>{E.eyeL.classList.remove('blinking');blinkBusyL=false},BLINK_HOLD_MS);
+  }else{
+    if(blinkBusyR||!E.eyeR)return;
+    blinkBusyR=true;
+    E.eyeR.classList.add('blinking');
+    setTimeout(()=>{E.eyeR.classList.remove('blinking');blinkBusyR=false},BLINK_HOLD_MS);
+  }
+}
+/** 打字空闲定时：双眼一起眨（与扳机无关） */
 function triggerBlinkOnce(){
   if(editorOn||!E.eyeL||!blinkMotionOk()||blinkBusy)return;
   blinkBusy=true;
-  E.eyeL.classList.remove('blinking');
-  E.eyeR.classList.remove('blinking');
-  void E.eyeL.offsetWidth;
   E.eyeL.classList.add('blinking');
   E.eyeR.classList.add('blinking');
   setTimeout(()=>{
     E.eyeL.classList.remove('blinking');
     E.eyeR.classList.remove('blinking');
-    E.eyeL.style.transform='';
-    E.eyeR.style.transform='';
-    E.eyeL.style.opacity='';
-    E.eyeR.style.opacity='';
     blinkBusy=false;
-  },BLINK_ANIM_MS+50);
+  },BLINK_HOLD_MS);
 }
 function ensureKbBlinkInterval(){
   if(kbBlinkInterval)return;
@@ -518,22 +530,70 @@ function showScene(){
   loadOperationCount();
 }
 
-lockBtn.addEventListener('click',()=>{
-  isLocked=!isLocked;
-  lockBtn.textContent=isLocked?'🔒':'🔓';
-  lockBtn.classList.toggle('locked',isLocked);
-  lockGlow.classList.toggle('on',isLocked);
-  if(window.overlay)window.overlay.setClickThrough(isLocked);
+let lastMouseHitIgnore=null;
+let rafHit=null;
+let lastClientX=0,lastClientY=0;
+function noGpVisible(){try{return getComputedStyle(noGp).display!=='none'}catch(_){return false}}
+function isClickThroughInteractiveTarget(el){
+  if(!el||el===document.body||el===document.documentElement)return false;
+  if(el.closest('.ctrl-strip'))return true;
+  if(el.closest('.editor-panel.show'))return true;
+  if(ctxMenu.classList.contains('show')&&el.closest('#ctxMenu'))return true;
+  if(noGpVisible()&&el.closest('#noGp'))return true;
+  if(editorOn&&(el.closest('img.editable')||el.closest('.op-counter.editable')))return true;
+  return false;
+}
+function syncClickThroughMouseHit(clientX,clientY){
+  if(!isLocked||!window.overlay||!window.overlay.setMouseIgnoreHit)return;
+  const el=document.elementFromPoint(clientX,clientY);
+  const interactive=isClickThroughInteractiveTarget(el);
+  const wantIgnore=!interactive;
+  if(wantIgnore===lastMouseHitIgnore)return;
+  lastMouseHitIgnore=wantIgnore;
+  window.overlay.setMouseIgnoreHit(wantIgnore,wantIgnore);
+}
+function setLockedUi(v){
+  isLocked=v;
+  lockBtn.textContent=v?'🔒':'🔓';
+  lockBtn.classList.toggle('locked',v);
+  lockGlow.classList.toggle('on',v);
+  document.body.classList.toggle('ct-through',v);
+  if(!v)lastMouseHitIgnore=null;
+}
+lockBtn.addEventListener('click',(ev)=>{
+  const v=!isLocked;
+  setLockedUi(v);
+  if(window.overlay)window.overlay.setClickThrough(v);
+  if(v)requestAnimationFrame(()=>syncClickThroughMouseHit(ev.clientX,ev.clientY));
+});
+document.addEventListener('mousemove',e=>{
+  lastClientX=e.clientX;lastClientY=e.clientY;
+  if(!isLocked)return;
+  if(rafHit)return;
+  rafHit=requestAnimationFrame(()=>{
+    rafHit=null;
+    syncClickThroughMouseHit(lastClientX,lastClientY);
+  });
+},{passive:true});
+document.documentElement.addEventListener('mouseleave',()=>{
+  if(!isLocked||!window.overlay||!window.overlay.setMouseIgnoreHit)return;
+  lastMouseHitIgnore=null;
+  window.overlay.setMouseIgnoreHit(true,true);
 });
 if(window.overlay){
+  window.overlay.getClickThrough().then(v=>{
+    if(v){
+      setLockedUi(true);
+      requestAnimationFrame(()=>syncClickThroughMouseHit(lastClientX,lastClientY));
+    }
+  }).catch(()=>{});
   window.overlay.onClickThroughChanged(v=>{
-    isLocked=v;lockBtn.textContent=v?'🔒':'🔓';
-    lockBtn.classList.toggle('locked',v);lockGlow.classList.toggle('on',v);
+    setLockedUi(v);
+    if(v)requestAnimationFrame(()=>syncClickThroughMouseHit(lastClientX,lastClientY));
   });
 }
 
 let winDragging=false;
-const ctxMenu=document.getElementById('ctxMenu');
 document.addEventListener('contextmenu',e=>e.preventDefault());
 
 // Left-click drag
@@ -587,13 +647,96 @@ const TRIG_EDGE=0.35;
 let prevInputSnap=null;
 
 const KB={btns:new Array(18).fill(false),axes:[0,0,0,0]};
-const KMAP={
-  'KeyJ':0,'KeyK':1,'KeyL':2,'KeyI':3,
-  'KeyQ':4,'KeyE':5,'Digit1':6,'Digit2':7,
-  'Tab':8,'Backspace':9,'KeyZ':10,'KeyX':11,
-  'ArrowUp':12,'ArrowDown':13,'ArrowLeft':14,'ArrowRight':15,
-  'KeyH':16,'KeyT':17,
-};
+const btnKeyHolds=Array.from({length:18},()=>new Set());
+function kbPressBtn(btn,code){
+  btnKeyHolds[btn].add(code);
+  KB.btns[btn]=true;
+}
+function kbReleaseBtn(btn,code){
+  btnKeyHolds[btn].delete(code);
+  KB.btns[btn]=btnKeyHolds[btn].size>0;
+}
+const rStick={xn:new Set(),xp:new Set(),yn:new Set(),yp:new Set()};
+function syncRStick(){
+  KB.axes[2]=rStick.xn.size?-1:(rStick.xp.size?1:0);
+  KB.axes[3]=rStick.yn.size?-1:(rStick.yp.size?1:0);
+}
+const RS_KEY_AXIS=new Map([
+  ['ArrowLeft',['x',-1]],['ArrowRight',['x',1]],['ArrowUp',['y',-1]],['ArrowDown',['y',1]],
+  ['Numpad4',['x',-1]],['Numpad6',['x',1]],['Numpad8',['y',-1]],['Numpad2',['y',1]],
+]);
+function rsPress(code){
+  const t=RS_KEY_AXIS.get(code);
+  if(!t)return false;
+  const[ax,d]=t;
+  if(ax==='x')(d<0?rStick.xn:rStick.xp).add(code);
+  else(d<0?rStick.yn:rStick.yp).add(code);
+  syncRStick();
+  return true;
+}
+function rsRelease(code){
+  if(!RS_KEY_AXIS.has(code))return false;
+  rStick.xn.delete(code);rStick.xp.delete(code);rStick.yn.delete(code);rStick.yp.delete(code);
+  syncRStick();
+  return true;
+}
+/** 多键同绑一手柄键时用 code 去重，避免松一键仍显示按下 */
+const BTN_BY_CODE=new Map([
+  ['KeyJ',0],['KeyK',1],['KeyL',2],['Semicolon',3],
+  ['KeyV',0],['KeyB',1],['KeyN',2],['KeyM',3],
+  ['KeyU',4],['KeyI',5],['KeyF',4],['KeyC',5],
+  ['KeyT',6],['KeyY',7],['Digit1',6],['Digit2',7],
+  ['Tab',8],['Backspace',9],['Slash',8],['Quote',9],
+  ['KeyZ',10],['KeyX',11],['BracketLeft',10],['BracketRight',11],
+  ['KeyQ',14],['KeyE',15],['KeyR',13],
+  ['KeyH',16],['KeyG',17],['KeyP',17],
+  ['Backquote',16],['Space',16],
+]);
+const KB_PREVIEW_MOD_ONLY=new Set(['ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight','OSLeft','OSRight','CapsLock','ContextMenu']);
+/** Windows 虚拟键 → 与 BTN_BY_CODE / 摇杆 一致的 code（Electron 无焦点时只靠全局钩子收得到 VK） */
+function vkToDomCode(vk){
+  if(vk>=0x41&&vk<=0x5A)return 'Key'+String.fromCharCode(vk);
+  if(vk>=0x30&&vk<=0x39)return 'Digit'+String.fromCharCode(vk);
+  switch(vk){
+    case 0x08:return 'Backspace';
+    case 0x09:return 'Tab';
+    case 0x20:return 'Space';
+    case 0x25:return 'ArrowLeft';
+    case 0x26:return 'ArrowUp';
+    case 0x27:return 'ArrowRight';
+    case 0x28:return 'ArrowDown';
+    case 0xBA:return 'Semicolon';
+    case 0xBF:return 'Slash';
+    case 0xC0:return 'Backquote';
+    case 0xDB:return 'BracketLeft';
+    case 0xDD:return 'BracketRight';
+    case 0xDE:return 'Quote';
+    default:
+      if(vk>=0x60&&vk<=0x69)return 'Numpad'+(vk-0x60);
+      return null;
+  }
+}
+function handleGameKeyDownBody(code){
+  if(editorOn)return false;
+  if(ctxMenu.classList.contains('show'))return false;
+  if(code==='KeyW'){KB.axes[1]=-1;kbPressBtn(12,'KeyW');return true}
+  if(code==='KeyS'){KB.axes[1]=1;return true}
+  if(code==='KeyA'){KB.axes[0]=-1;return true}
+  if(code==='KeyD'){KB.axes[0]=1;return true}
+  if(rsPress(code))return true;
+  const bi=BTN_BY_CODE.get(code);
+  if(bi!==undefined){kbPressBtn(bi,code);return true}
+  return false;
+}
+function handleGameKeyUpBody(code){
+  if(editorOn)return;
+  if(code==='KeyW'){KB.axes[1]=0;kbReleaseBtn(12,'KeyW');return}
+  if(code==='KeyS')KB.axes[1]=0;
+  if(code==='KeyA'||code==='KeyD')KB.axes[0]=0;
+  if(rsRelease(code))return;
+  const bi=BTN_BY_CODE.get(code);
+  if(bi!==undefined)kbReleaseBtn(bi,code);
+}
 let kbActive=false;
 document.addEventListener('keydown',e=>{
   if(e.repeat)return;
@@ -604,30 +747,18 @@ document.addEventListener('keydown',e=>{
   if(editorOn)return;
   if(ctxMenu.classList.contains('show'))return;
 
-  if(!window.overlay&&!e.repeat){
-    const modOnly=new Set(['ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight','OSLeft','OSRight','CapsLock','ContextMenu']);
-    if(!modOnly.has(e.code))flushOperationCount(1);
+  if(!window.overlay){
+    if(!KB_PREVIEW_MOD_ONLY.has(e.code))flushOperationCount(1);
   }
 
-  const bi=KMAP[e.code];
-  if(bi!==undefined){e.preventDefault();KB.btns[bi]=true;activateKB();return}
-  if(e.code==='KeyW'){KB.axes[1]=-1;activateKB()}
-  if(e.code==='KeyS'){KB.axes[1]=1;activateKB()}
-  if(e.code==='KeyA'){KB.axes[0]=-1;activateKB()}
-  if(e.code==='KeyD'){KB.axes[0]=1;activateKB()}
-  if(e.code==='Numpad8'){KB.axes[3]=-1;activateKB()}
-  if(e.code==='Numpad2'||e.code==='Numpad5'){KB.axes[3]=1;activateKB()}
-  if(e.code==='Numpad4'){KB.axes[2]=-1;activateKB()}
-  if(e.code==='Numpad6'){KB.axes[2]=1;activateKB()}
+  if(handleGameKeyDownBody(e.code)){
+    e.preventDefault();
+    activateKB();
+  }
 });
 document.addEventListener('keyup',e=>{
   if(editorOn)return;
-  const bi=KMAP[e.code];
-  if(bi!==undefined){KB.btns[bi]=false;return}
-  if(e.code==='KeyW'||e.code==='KeyS')KB.axes[1]=0;
-  if(e.code==='KeyA'||e.code==='KeyD')KB.axes[0]=0;
-  if(e.code==='Numpad8'||e.code==='Numpad2'||e.code==='Numpad5')KB.axes[3]=0;
-  if(e.code==='Numpad4'||e.code==='Numpad6')KB.axes[2]=0;
+  handleGameKeyUpBody(e.code);
 });
 function activateKB(){if(!kbActive){kbActive=true;detBadge.textContent='Keyboard · '+CONCAT_EDITION_LABEL;showScene()}}
 
@@ -670,13 +801,23 @@ function typeKeyUp(code){
   }
 }
 
+/** 全局钩子重复 WM_KEYDOWN 去重；不能依赖 document.hasFocus()（透明置顶窗下常误判 true，会跳过钩子又收不到 Chromium keydown） */
+const globalVkDown=new Set();
 if(window.overlay){
   window.overlay.onGlobalKeyDown(keycode=>{
     if(keycode===0x71)return;
+    if(!globalVkDown.has(keycode)){
+      globalVkDown.add(keycode);
+      const code=vkToDomCode(keycode);
+      if(code&&handleGameKeyDownBody(code))activateKB();
+    }
     typeKeyDown(keycode);
   });
   window.overlay.onGlobalKeyUp(keycode=>{
     if(keycode===0x71)return;
+    globalVkDown.delete(keycode);
+    const code=vkToDomCode(keycode);
+    if(code)handleGameKeyUpBody(code);
     typeKeyUp(keycode);
   });
   window.overlay.onToggleLayoutEditor(()=>toggleEditor());
@@ -695,9 +836,6 @@ function applyState(btns,axes,trigL,trigR,isGamepad){
   for(let i=0;i<4;i++){const el=E[FB_MAP[i]];if(el)el.classList.toggle('pressed',!!btns[i])}
 
   const l1=!!btns[4],r1=!!btns[5];
-  if((l1&&!prevShoulderL)||(r1&&!prevShoulderR))triggerBlinkOnce();
-  prevShoulderL=l1;
-  prevShoulderR=r1;
 
   liftHand('L',l1);
   liftHand('R',r1);
@@ -729,6 +867,11 @@ function applyState(btns,axes,trigL,trigR,isGamepad){
   if(!hasInput&&(trigL>0.1||trigR>0.1))hasInput=true;
   E.tail.classList.toggle('active',hasInput);
 
+  if(prevTrigBlinkL<TRIG_EDGE&&trigL>=TRIG_EDGE)triggerBlinkEye('L');
+  if(prevTrigBlinkR<TRIG_EDGE&&trigR>=TRIG_EDGE)triggerBlinkEye('R');
+  prevTrigBlinkL=trigL;
+  prevTrigBlinkR=trigR;
+
   if(isGamepad){
     const b=btns.map(x=>!!x);
     if(prevInputSnap){
@@ -749,7 +892,14 @@ function loop(){
     if(gp){
       const btns=[];for(let i=0;i<18;i++)btns[i]=gp.buttons[i]?.pressed||false;
       const axes=[gp.axes[0]||0,gp.axes[1]||0,gp.axes[2]||0,gp.axes[3]||0];
-      applyState(btns,axes,gp.buttons[6]?.value||0,gp.buttons[7]?.value||0,true);
+      let tL=gp.buttons[6]?.value||0,tR=gp.buttons[7]?.value||0;
+      if(kbActive){
+        for(let i=0;i<18;i++) if(KB.btns[i]) btns[i]=true;
+        for(let i=0;i<4;i++) if(Math.abs(KB.axes[i])>0.01) axes[i]=KB.axes[i];
+        if(KB.btns[6]) tL=Math.max(tL,1);
+        if(KB.btns[7]) tR=Math.max(tR,1);
+      }
+      applyState(btns,axes,tL,tR,true);
       return;
     }
   }
@@ -820,9 +970,9 @@ function toggleEditor(){
   if(editorOn){
     if(E.eyeL){
       E.eyeL.classList.remove('blinking');E.eyeR.classList.remove('blinking');
-      E.eyeL.style.transform='';E.eyeR.style.transform='';
-      E.eyeL.style.opacity='';E.eyeR.style.opacity='';
       blinkBusy=false;
+      blinkBusyL=false;
+      blinkBusyR=false;
       E.eyeL.classList.add('cat-eye-edit');E.eyeR.classList.add('cat-eye-edit');
     }
     showScene();

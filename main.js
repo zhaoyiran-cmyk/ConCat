@@ -53,6 +53,11 @@ function createWindow() {
     win.setIgnoreMouseEvents(true, { forward: true });
   }
 
+  win.webContents.once('did-finish-load', () => {
+    if (!win || win.isDestroyed()) return;
+    win.webContents.send('click-through-changed', isClickThrough);
+  });
+
   win.on('moved', saveBounds);
   win.on('resized', saveBounds);
 
@@ -67,7 +72,7 @@ function toggleClickThrough() {
   isClickThrough = !isClickThrough;
   store.set('clickThrough', isClickThrough);
   if (win) {
-    win.setIgnoreMouseEvents(isClickThrough, { forward: true });
+    win.setIgnoreMouseEvents(isClickThrough, isClickThrough ? { forward: true } : undefined);
     win.webContents.send('click-through-changed', isClickThrough);
   }
   updateTrayMenu();
@@ -219,8 +224,17 @@ app.on('window-all-closed', () => {
 ipcMain.on('set-click-through', (_e, val) => {
   isClickThrough = val;
   store.set('clickThrough', val);
-  if (win) win.setIgnoreMouseEvents(val, { forward: true });
+  if (win) win.setIgnoreMouseEvents(val, val ? { forward: true } : undefined);
   updateTrayMenu();
+});
+
+ipcMain.handle('get-click-through', () => !!isClickThrough);
+
+/** 渲染进程在锁定模式下根据鼠标是否在可点击 UI 上动态切换穿透，不改变 settings 中的 clickThrough */
+ipcMain.on('mouse-ignore-hit', (_e, ignore, forward) => {
+  if (!win || win.isDestroyed()) return;
+  if (!isClickThrough) return;
+  win.setIgnoreMouseEvents(!!ignore, ignore && forward ? { forward: true } : undefined);
 });
 
 let dragStart = null;
