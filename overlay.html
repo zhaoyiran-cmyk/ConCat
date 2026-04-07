@@ -2,24 +2,18 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Gamepad Overlay</title>
+<title>ConCat · DS4</title>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --paw:#d4967e;--paw-dk:#c4866e;--ear-pink:#f0a0b8;--nose-pink:#f0a0b0;
-  --fur:#3a3a3a;--fur-lt:#4a4a4a;--fur-dk:#2d2d2d;
-  --ctrl:#1e1e1e;--ctrl-lt:#2a2a2a;--ctrl-st:#333;
-  --glow-blue:rgba(125,211,252,.4);
-}
 html,body{
   background:transparent;overflow:hidden;
-  width:100%;height:100%;user-select:none;
-  font-family:'Segoe UI',-apple-system,system-ui,sans-serif;cursor:default;
+  width:100%;height:100%;user-select:none;cursor:default;
+  font-family:'Segoe UI',system-ui,sans-serif;
 }
 html.preview{background:#1a1a2e}
 body.dragging{cursor:grabbing}
 
-.ctrl-btns{position:absolute;top:3px;right:4px;display:flex;gap:3px;z-index:20}
+.ctrl-btns{position:absolute;top:3px;right:4px;display:flex;gap:3px;z-index:200}
 .ctrl-btns button{
   width:20px;height:20px;border:none;border-radius:50%;font-size:10px;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -27,46 +21,190 @@ body.dragging{cursor:grabbing}
 }
 .ctrl-btns button:hover{background:rgba(60,60,60,.5)}
 .ctrl-btns button.locked{background:#e879a8;color:#fff}
-.lock-glow{position:absolute;inset:0;pointer-events:none;border:2px solid transparent;border-radius:8px;transition:border-color .3s}
+.lock-glow{position:absolute;inset:0;pointer-events:none;border:2px solid transparent;border-radius:8px;transition:border-color .3s;z-index:199}
 .lock-glow.on{border-color:rgba(232,121,168,.35)}
-.det-badge{position:absolute;top:4px;left:6px;font-size:8px;font-weight:700;color:#888;letter-spacing:.04em;opacity:.6;pointer-events:none}
-.canvas{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:2px 4px 4px}
-.canvas svg{width:100%;height:100%}
-.no-gp{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:100%;color:#888;font-size:11px;text-align:center;animation:breathe 2.5s ease-in-out infinite}
+.det-badge{position:absolute;top:4px;left:6px;font-size:8px;font-weight:700;color:#888;letter-spacing:.04em;opacity:.6;pointer-events:none;z-index:200}
+
+.no-gp{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;height:100%;color:#888;font-size:11px;text-align:center;
+  animation:breathe 2.5s ease-in-out infinite;
+}
 .no-gp .icon{font-size:36px;opacity:.5}
 .no-gp .hint{font-size:9px;color:#666;opacity:.7}
 @keyframes breathe{0%,100%{opacity:.8}50%{opacity:.35}}
 
-/* ===== CAT SVG STYLES ===== */
-#ear-l,#ear-r{transition:transform .1s ease-out;transform-box:view-box}
-#ear-l{transform-origin:182px 55px}
-#ear-r{transform-origin:258px 55px}
-.eo{transition:opacity .06s}
-.ec{opacity:0;transition:opacity .06s}
-.tail-g{transform-origin:300px 120px;transform-box:view-box;animation:sway 3s ease-in-out infinite}
-@keyframes sway{0%,100%{transform:rotate(0)}50%{transform:rotate(5deg)}}
-.ctrl-body{fill:var(--ctrl);stroke:var(--ctrl-st);stroke-width:1.5}
-.ctrl-tp{fill:var(--ctrl-lt);stroke:#3a3a3a;stroke-width:1;transition:all .06s}
-.ctrl-tp.p{fill:#3a3a3a}
-.light-bar{fill:#7dd3fc;opacity:.6;filter:drop-shadow(0 0 6px var(--glow-blue))}
-.bumper{fill:var(--ctrl-lt);stroke:var(--ctrl-st);stroke-width:1;transition:all .06s;rx:3}
-.bumper.p{fill:#4a4a4a;stroke:#666}
-.fb{transition:transform .06s cubic-bezier(.34,1.56,.64,1);transform-origin:center;transform-box:fill-box}
-.fb.p{transform:scale(1.18)}
-.fb .ring{stroke-width:2;fill:var(--ctrl);transition:all .06s}
-.fb.p .ring{stroke-width:3;filter:drop-shadow(0 0 5px var(--btn-c))}
-.fb-lbl{font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
-.dp-cross{fill:#252525;stroke:var(--ctrl-st);stroke-width:1}
-.dp-dir{fill:transparent;transition:fill .06s}
-.dp-dir.p{fill:rgba(212,150,126,.35)}
-.stick-cap{fill:var(--ctrl-lt);stroke:#3a3a3a;stroke-width:1.5;transition:all .03s}
-.stick-lbl{fill:#555;font-size:7px;font-weight:700;text-anchor:middle}
-.cbtn{fill:var(--ctrl-lt);stroke:var(--ctrl-st);stroke-width:1;transition:all .06s}
-.cbtn.p{fill:#4a4a4a;stroke:#555}
-.cbtn-lbl{fill:#777;font-size:5px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
-.btn-lbl{fill:#888;font-size:6px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
-.trig-val{fill:#666;font-size:7px;font-weight:600;text-anchor:middle;font-family:'Cascadia Code','SF Mono',monospace}
-.status-txt{fill:#555;font-size:6.5px;text-anchor:middle;font-weight:600}
+.scene{position:absolute;overflow:visible;transform-origin:0 0}
+.scene img{position:absolute;pointer-events:none;image-rendering:auto}
+
+.z1{z-index:1}.z2{z-index:2}.z3{z-index:3}.z-hand{z-index:16;transition:top .08s ease-out}
+.z10{z-index:10}
+.z11{z-index:11;opacity:0;transition:opacity .1s}.z11.show{opacity:1;filter:brightness(1.15)}
+.z15{z-index:15;transition:filter .06s,transform .06s}
+.z15.pressed{filter:brightness(1.5) drop-shadow(0 0 8px rgba(255,255,255,.3));transform:scale(1.1)}
+.z-st{z-index:14;transition:filter .06s}.z-st.pressed{filter:brightness(1.3) drop-shadow(0 0 4px rgba(255,200,200,.3))}
+.z-cb{z-index:15;transition:filter .06s}.z-cb.pressed{filter:brightness(1.5) drop-shadow(0 0 4px rgba(255,255,255,.2))}
+.z12{z-index:12}
+
+.op-counter{
+  font-family:'Segoe UI',system-ui,sans-serif;
+  font-weight:600;
+  color:rgba(255,255,255,.92);
+  text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.5);
+  letter-spacing:.02em;
+  border-radius:12px;
+  background:rgba(10,10,22,.72);
+  border:1px solid rgba(240,160,184,.28);
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  box-sizing:border-box;
+  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px;
+}
+.op-counter-label{color:rgba(226,224,252,.8);font-weight:500;line-height:1.15}
+.op-counter-val{color:#fcd34d;font-variant-numeric:tabular-nums;font-weight:800;line-height:1.1;letter-spacing:.02em}
+.op-counter-unit{color:rgba(226,224,252,.75);font-weight:500;line-height:1.15}
+
+@keyframes tail-idle{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+@keyframes tail-wag{0%{transform:rotate(-15deg)}25%{transform:rotate(10deg)}50%{transform:rotate(-10deg)}75%{transform:rotate(15deg)}100%{transform:rotate(-15deg)}}
+.tail-anim{animation:tail-idle 3s ease-in-out infinite}
+.tail-anim.active{animation:tail-wag .35s ease-in-out infinite}
+
+/* 方法一：eye_* 素材是「闭眼/眼皮」图；猫头底图自带睁眼。常态隐藏眼皮，仅 .blinking 时短暂盖住眼睛 */
+.cat-face-wrap{overflow:visible}
+.cat-eye{
+  z-index:3;object-fit:contain;
+  transform-origin:50% 52%;
+  opacity:0;
+  pointer-events:none;
+}
+/* F2 编辑时要能看见眼皮图层以便对齐 */
+.cat-eye.cat-eye-edit{opacity:1}
+.cat-eye.blinking{
+  animation:cat-blink .26s ease-in-out;
+  animation-fill-mode:forwards;
+}
+@keyframes cat-blink{
+  0%{opacity:0;transform:scaleY(0.12)}
+  12%{opacity:1;transform:scaleY(0.12)}
+  38%{opacity:1;transform:scaleY(1)}
+  58%{opacity:1;transform:scaleY(0.12)}
+  88%{opacity:1;transform:scaleY(0.12)}
+  100%{opacity:0;transform:scaleY(0.12)}
+}
+@media (prefers-reduced-motion:reduce){
+  .cat-eye.blinking{animation:none;opacity:0}
+}
+
+/* ===== EDITOR MODE ===== */
+.editor-panel{
+  position:fixed;top:4px;left:50%;transform:translateX(-50%);width:480px;max-height:160px;
+  background:rgba(0,0,0,.88);border-radius:8px;border:1px solid rgba(240,160,184,.3);
+  color:#ccc;font-size:10px;overflow-y:auto;z-index:500;padding:6px 8px;
+  font-family:'Cascadia Code','SF Mono',monospace;display:none;
+}
+.editor-panel.show{display:block}
+.editor-panel h3{color:#f0a0b8;margin:0 0 6px;font-size:12px}
+.editor-panel .ep-grid{display:flex;flex-wrap:wrap;gap:2px;margin:4px 0}
+.editor-panel .ep-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:2px 4px;border-radius:3px;cursor:pointer;width:calc(50% - 1px);
+}
+.editor-panel .ep-row:hover{background:rgba(255,255,255,.08)}
+.editor-panel .ep-row.sel{background:rgba(240,160,184,.2);color:#fff}
+.editor-panel .ep-name{color:#7dd3fc}
+.editor-panel .ep-val{color:#fbbf24}
+.editor-panel .ep-hint{color:#666;font-size:9px;line-height:1.3}
+.editor-panel .ep-detail{
+  display:none;margin:4px 0;padding:4px 6px;background:rgba(240,160,184,.08);
+  border-radius:4px;border:1px solid rgba(240,160,184,.15);
+}
+.editor-panel .ep-detail.show{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.editor-panel .ep-detail .ed-field{display:flex;align-items:center;gap:2px}
+.editor-panel .ep-detail .ed-field label{color:#888;font-size:9px;min-width:14px}
+.editor-panel .ep-detail .ed-field input{
+  width:50px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+  border-radius:3px;color:#fbbf24;font-size:10px;text-align:center;padding:2px;
+  font-family:inherit;
+}
+.editor-panel .ep-detail .ed-sz-btn{
+  width:18px;height:18px;border:1px solid rgba(255,255,255,.2);border-radius:3px;
+  background:transparent;color:#ccc;cursor:pointer;font-size:12px;display:flex;
+  align-items:center;justify-content:center;
+}
+.editor-panel .ep-detail .ed-sz-btn:hover{background:rgba(255,255,255,.1)}
+.editor-panel .ep-btns{display:flex;gap:4px;margin-top:4px}
+.editor-panel .ep-btn{
+  flex:1;padding:4px;border:1px solid #f0a0b8;
+  border-radius:4px;background:transparent;color:#f0a0b8;cursor:pointer;font-size:10px;
+  font-family:inherit;
+}
+.editor-panel .ep-btn:hover{background:rgba(240,160,184,.15)}
+.scene img.editable,.scene .op-counter.editable{pointer-events:auto!important;cursor:move;outline:1px dashed rgba(240,160,184,.5)}
+.scene img.editable:hover,.scene .op-counter.editable:hover{outline:2px solid #f0a0b8}
+.scene img.editable.ed-sel,.scene .op-counter.editable.ed-sel{outline:2px solid #7dd3fc}
+.ed-label{
+  position:absolute;background:rgba(0,0,0,.8);color:#fbbf24;font-size:9px;
+  padding:1px 4px;border-radius:2px;pointer-events:none;z-index:999;
+  font-family:'Cascadia Code',monospace;white-space:nowrap;
+}
+
+/* ===== CONTEXT MENU (Stitch: Celestial Feline) ===== */
+.ctx-menu{
+  position:fixed;display:none;z-index:600;
+  width:176px;padding:6px 0;
+  background:rgba(26,26,46,.94);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-radius:10px;
+  border:1px solid rgba(240,160,184,.12);
+  box-shadow:0 8px 32px rgba(240,160,184,.08),0 2px 8px rgba(0,0,0,.4);
+  font-family:'Segoe UI',system-ui,sans-serif;
+  color:#e2e0fc;
+  animation:ctx-in .12s ease-out;
+}
+.ctx-menu.show{display:block}
+@keyframes ctx-in{from{opacity:0;transform:scale(.96) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+.ctx-header{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 14px 6px;font-size:11px;color:#9f8c90;letter-spacing:.03em;
+}
+.ctx-divider{height:1px;margin:2px 10px;background:rgba(240,160,184,.1)}
+
+.ctx-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 14px;font-size:12px;cursor:pointer;
+  transition:background .15s;
+}
+.ctx-item:hover{background:rgba(240,160,184,.08)}
+.ctx-item .ctx-label{flex:1}
+
+.ctx-check{
+  width:16px;height:16px;border-radius:4px;
+  border:1.5px solid rgba(240,160,184,.4);
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;font-size:10px;color:transparent;
+}
+.ctx-check.on{
+  background:linear-gradient(135deg,#ffc2d3,#f0a0b8);
+  border-color:#f0a0b8;color:#541d32;
+}
+
+.ctx-group-label{
+  padding:6px 14px 2px;font-size:10px;color:#9f8c90;
+  letter-spacing:.04em;
+}
+
+.ctx-radio{
+  width:14px;height:14px;border-radius:50%;
+  border:1.5px solid rgba(240,160,184,.35);
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;margin-right:8px;flex-shrink:0;
+}
+.ctx-radio .ctx-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:transparent;transition:background .15s;
+}
+.ctx-radio.on{border-color:#f0a0b8}
+.ctx-radio.on .ctx-dot{background:linear-gradient(135deg,#ffc2d3,#f0a0b8)}
 </style>
 </head>
 <body>
@@ -75,16 +213,52 @@ body.dragging{cursor:grabbing}
 </div>
 <div class="lock-glow" id="lockGlow"></div>
 <div class="det-badge" id="detBadge"></div>
-<div class="canvas" id="canvas">
-  <div class="no-gp" id="no-gp">
-    <div class="icon">🐱</div>
-    <div>连接手柄后按任意键</div>
-    <div class="hint">右键按住拖动 · Ctrl+Shift+G 锁定</div>
+
+<div id="noGp" class="no-gp">
+  <div class="icon">🐱</div>
+  <div>连接手柄或按键盘启动</div>
+  <div class="hint">键盘: WASD=左摇杆 · 小键盘=右摇杆 · IJKL=△○□× · ↑↓←→=方向键</div>
+  <div class="hint">QE=L1R1 · 12=L2R2 · ZX=L3R3 · T=触摸板 · H=Home · Tab/BS=Share/Opt</div>
+  <div class="hint" style="margin-top:2px;opacity:.85">当前发行线：<b style="color:#f0a0b8">索尼 DS4 / PlayStation 布局</b> · Xbox / Switch / 键盘专版规划中</div>
+  <div class="hint" style="margin-top:4px;color:#f0a0b8">F2 = 布局编辑器（全局快捷键，无需点中窗口）</div>
+  <div class="hint" style="margin-top:2px;opacity:.75">连接手柄或键盘模拟后显示「操作 N 次」；<strong>F2</strong> 可选中「操作计数器」拖动位置，滚轮/Ctrl+方向键调宽高（字号随高度变化）</div>
+</div>
+
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-header">🐾 ConCat · DS4</div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-item" id="ctxOnTop">
+    <span class="ctx-label">📌 置顶显示</span>
+    <div class="ctx-check on" id="ctxOnTopCheck">✓</div>
+  </div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-group-label">🔍 窗口大小</div>
+  <div class="ctx-item ctx-scale" data-scale="0.5">
+    <div class="ctx-radio" id="ctxR05"><div class="ctx-dot"></div></div>
+    <span class="ctx-label">0.5x 缩小</span>
+  </div>
+  <div class="ctx-item ctx-scale" data-scale="1">
+    <div class="ctx-radio on" id="ctxR10"><div class="ctx-dot"></div></div>
+    <span class="ctx-label">1.0x 标准</span>
+  </div>
+  <div class="ctx-item ctx-scale" data-scale="1.5">
+    <div class="ctx-radio" id="ctxR15"><div class="ctx-dot"></div></div>
+    <span class="ctx-label">1.5x 放大</span>
   </div>
 </div>
 
+<div class="scene" id="scene" style="display:none"></div>
+<div class="editor-panel" id="editorPanel"></div>
+
 <script>
-// ==================== DETECTION ====================
+/**
+ * ConCat 产品版本线（皮肤 / 布局 / 按键映射）
+ * - 当前构建：playstation_ds4 — 底图 body.png、触摸板 bord、△○×□ 与 P 坐标均按 DualShock 4 / PS 系校准；Gamepad 键位按标准映射接 applyState。
+ * - 规划中（独立发行或构建切换）：xbox — Xbox 布局与素材；switch — Switch Pro 布局；keyboard — 纯键盘 HUD 专版（与现有「键盘模拟手柄」可并存或拆分）。
+ */
+/** 与 package.json / CHANGELOG「产品版本线」一致；后续 Xbox/Switch/keyboard 构建可改此常量并分支加载资源。 */
+const CONCAT_EDITION_LABEL = 'DS4';
+
 const DETECT=[
   {type:'ps5',patterns:[/dualsense/i,/054c:0ce6/i,/054c:0df2/i]},
   {type:'ps4',patterns:[/dualshock\s*4/i,/054c:05c4/i,/054c:09cc/i,/054c:0ba0/i,/playstation.*wireless/i]},
@@ -93,7 +267,8 @@ const DETECT=[
   {type:'xbox',patterns:[/xbox/i,/xinput/i,/045e:/i,/microsoft/i]},
   {type:'xbox',patterns:[/8bitdo/i,/gamesir/i,/razer/i,/logitech/i,/steelseries/i,/hori/i,/powera/i]},
 ];
-function detectType(id){for(const r of DETECT)for(const p of r.patterns)if(p.test(id||''))return r.type;return 'xbox'}
+/** 未识别手柄默认 xbox 类型（键位索引与 Xbox 标准一致）；当前皮肤仍为 DS4 版，跨平台映射后续按版本线拆分。 */
+function detectType(id){for(const r of DETECT)for(const p of r.patterns)if(p.test(id||''))return r.type;return'xbox'}
 function detectLabel(type,id){
   const s=(id||'').toLowerCase();
   if(type==='ps5')return'PS5 DualSense';if(type==='ps4')return/dualshock/i.test(s)?'PS4 DualShock':'PlayStation';
@@ -102,220 +277,245 @@ function detectLabel(type,id){
   if(/8bitdo/i.test(s))return'8BitDo';return'Xbox';
 }
 
-// ==================== CONFIG ====================
-const CFG={
-  xbox:{
-    face:['A','B','X','Y'],fCol:['#5ec26e','#f87171','#60a5fa','#fbbf24'],
-    tl:'LT',tr:'RT',bl:'LB',br:'RB',center:['View','⊞','Menu'],hasTP:false,
-  },
-  ps4:{
-    face:['×','○','□','△'],fCol:['#60a5fa','#fb7185','#c084fc','#6ee7b7'],
-    tl:'L2',tr:'R2',bl:'L1',br:'R1',center:['Share','PS','Opt'],hasTP:true,
-  },
-  ps5:{
-    face:['×','○','□','△'],fCol:['#60a5fa','#fb7185','#c084fc','#6ee7b7'],
-    tl:'L2',tr:'R2',bl:'L1',br:'R1',center:['Create','PS','Opt'],hasTP:true,
-  },
-  switch:{
-    face:['B','A','Y','X'],fCol:['#f87171','#5ec26e','#fbbf24','#60a5fa'],
-    tl:'ZL',tr:'ZR',bl:'L',br:'R',center:['−','⌂','+'],hasTP:false,
-  },
+const BW=1146,BH=749,OVER_TOP=680,OVER_R=150,OVER_BOTTOM=48;
+
+/** 布局与素材针对 playstation_ds4；Xbox/Switch/keyboard 专版需替换 body、P 与 applyState 映射。 */
+const P={
+  cathead:{l:190,t:-602,w:767,h:716},
+  tail:   {l:895,t:-361,w:314,h:563},
+  handL:  {l:205,t:-75,w:202,h:182},
+  handR:  {l:738,t:-73,w:192,h:172},
+  eyeL:   {l:306,t:-312,w:208,h:158},
+  eyeR:   {l:629,t:-319,w:213,h:163},
+  bord:   {l:388,t:105,w:370,h:218},
+  dpU:    {l:188,t:146,w:81,h:92},
+  dpD:    {l:191,t:260,w:74,h:84},
+  dpL:    {l:134,t:209,w:86,h:75},
+  dpR:    {l:242,t:207,w:85,h:75},
+  fbT:    {l:875,t:124,w:83,h:84},
+  fbR:    {l:946,t:201,w:95,h:95},
+  fbB:    {l:873,t:282,w:90,h:90},
+  fbL:    {l:792,t:200,w:89,h:90},
+  stkL:   {l:327,t:331,w:136,h:137},
+  stkR:   {l:681,t:327,w:136,h:137},
+  share:  {l:333,t:101,w:41,h:74},
+  opt:    {l:776,t:104,w:40,h:71},
+  home:   {l:532,t:369,w:81,h:80},
+  opCounter:{l:403,t:698,w:340,h:56},
 };
 
-let curType='xbox',gpIdx=null,connected={};
+const PKEY_MAP={
+  cathead:'cathead',tail:'tail',handL:'handL',handR:'handR',
+  eyeL:'eyeL',eyeR:'eyeR',
+  bord:'bord',
+  dpU:'dpU',dpD:'dpD',dpL:'dpL',dpR:'dpR',
+  fbT:'fbT',fbR:'fbR',fbB:'fbB',fbL:'fbL',
+  stkL:'stkL',stkR:'stkR',share:'share',opt:'opt',home:'home',
+  opCounter:'opCounter',
+};
 
-// ==================== SVG BUILDER ====================
-function buildCatSVG(type){
-  const C=CFG[type];
-  const W=440,H=310;
-  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-
-  // ===== TAIL =====
-  s+=`<g class="tail-g">`;
-  s+=`<path d="M 298,118 C 325,100 355,65 375,40 C 382,30 388,25 392,32 C 396,40 388,58 375,75 C 355,100 330,118 308,125" fill="var(--fur)"/>`;
-  s+=`<path d="M 375,40 C 385,25 392,22 395,30 C 398,38 392,52 385,62" fill="var(--fur)"/>`;
-  s+=`</g>`;
-
-  // ===== CAT BODY =====
-  s+=`<ellipse cx="220" cy="142" rx="70" ry="20" fill="var(--fur)"/>`;
-
-  // ===== CONTROLLER BODY =====
-  s+=`<path class="ctrl-body" d="
-    M 120,155 C 120,148 160,140 220,140 C 280,140 320,148 320,155
-    L 326,178 C 338,185 352,200 360,218
-    L 374,262 C 380,278 377,296 366,304 C 355,312 340,308 332,296
-    L 314,252 C 306,236 280,228 220,228
-    C 160,228 134,236 126,252
-    L 108,296 C 100,308 85,312 74,304 C 63,296 60,278 66,262
-    L 80,218 C 88,200 102,185 114,178 Z"/>`;
-
-  // ===== CAT HEAD =====
-  // Left ear (LT)
-  s+=`<g id="ear-l">`;
-  s+=`<path d="M 172,55 L 148,5 L 200,38 Z" fill="var(--fur)"/>`;
-  s+=`<path d="M 176,50 L 156,14 L 196,40 Z" fill="var(--ear-pink)"/>`;
-  s+=`</g>`;
-  // Right ear (RT)
-  s+=`<g id="ear-r">`;
-  s+=`<path d="M 268,55 L 292,5 L 240,38 Z" fill="var(--fur)"/>`;
-  s+=`<path d="M 264,50 L 284,14 L 244,40 Z" fill="var(--ear-pink)"/>`;
-  s+=`</g>`;
-
-  // Head
-  s+=`<ellipse cx="220" cy="80" rx="56" ry="50" fill="var(--fur)"/>`;
-  s+=`<ellipse cx="195" cy="90" rx="18" ry="12" fill="var(--fur-lt)" opacity=".25"/>`;
-  s+=`<ellipse cx="245" cy="90" rx="18" ry="12" fill="var(--fur-lt)" opacity=".25"/>`;
-
-  // Left eye (LB)
-  s+=`<g id="eye-l">`;
-  s+=`<g class="eo">`;
-  s+=`<ellipse cx="198" cy="74" rx="14" ry="16" fill="#fff"/>`;
-  s+=`<ellipse cx="199" cy="76" rx="10" ry="12" fill="#d4a040"/>`;
-  s+=`<ellipse cx="199" cy="80" rx="8" ry="7" fill="#c08830" opacity=".35"/>`;
-  s+=`<ellipse cx="199" cy="76" rx="5" ry="6.5" fill="#1a1a1a"/>`;
-  s+=`<circle cx="204" cy="69" r="3.5" fill="#fff"/>`;
-  s+=`<circle cx="194" cy="72" r="2" fill="#fff" opacity=".7"/>`;
-  s+=`<circle cx="202" cy="67" r="1.2" fill="#fff"/>`;
-  s+=`</g>`;
-  s+=`<path class="ec" d="M 184,77 Q 198,65 212,77" stroke="#555" stroke-width="3" fill="none" stroke-linecap="round"/>`;
-  s+=`</g>`;
-
-  // Right eye (RB)
-  s+=`<g id="eye-r">`;
-  s+=`<g class="eo">`;
-  s+=`<ellipse cx="242" cy="74" rx="14" ry="16" fill="#fff"/>`;
-  s+=`<ellipse cx="241" cy="76" rx="10" ry="12" fill="#d4a040"/>`;
-  s+=`<ellipse cx="241" cy="80" rx="8" ry="7" fill="#c08830" opacity=".35"/>`;
-  s+=`<ellipse cx="241" cy="76" rx="5" ry="6.5" fill="#1a1a1a"/>`;
-  s+=`<circle cx="246" cy="69" r="3.5" fill="#fff"/>`;
-  s+=`<circle cx="236" cy="72" r="2" fill="#fff" opacity=".7"/>`;
-  s+=`<circle cx="244" cy="67" r="1.2" fill="#fff"/>`;
-  s+=`</g>`;
-  s+=`<path class="ec" d="M 228,77 Q 242,65 256,77" stroke="#555" stroke-width="3" fill="none" stroke-linecap="round"/>`;
-  s+=`</g>`;
-
-  // Nose
-  s+=`<path d="M 220,96 L 215,102 Q 220,104 225,102 Z" fill="var(--nose-pink)"/>`;
-  // Mouth
-  s+=`<path d="M 212,105 Q 216,110 220,105 Q 224,110 228,105" stroke="#555" stroke-width="1.2" fill="none"/>`;
-
-  // Whiskers
-  s+=`<g class="whiskers-l">`;
-  s+=`<line x1="186" y1="95" x2="145" y2="88" stroke="#555" stroke-width=".8"/>`;
-  s+=`<line x1="186" y1="98" x2="143" y2="98" stroke="#555" stroke-width=".8"/>`;
-  s+=`<line x1="186" y1="101" x2="145" y2="108" stroke="#555" stroke-width=".8"/>`;
-  s+=`</g>`;
-  s+=`<g class="whiskers-r">`;
-  s+=`<line x1="254" y1="95" x2="295" y2="88" stroke="#555" stroke-width=".8"/>`;
-  s+=`<line x1="254" y1="98" x2="297" y2="98" stroke="#555" stroke-width=".8"/>`;
-  s+=`<line x1="254" y1="101" x2="295" y2="108" stroke="#555" stroke-width=".8"/>`;
-  s+=`</g>`;
-
-  // ===== PAWS =====
-  s+=`<ellipse cx="150" cy="148" rx="15" ry="11" fill="var(--fur)" transform="rotate(-12 150 148)"/>`;
-  s+=`<circle cx="148" cy="150" r="4.5" fill="var(--paw)" opacity=".7"/>`;
-  s+=`<circle cx="143" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
-  s+=`<circle cx="148" cy="142" r="2.2" fill="var(--paw)" opacity=".6"/>`;
-  s+=`<circle cx="153" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
-  s+=`<ellipse cx="290" cy="148" rx="15" ry="11" fill="var(--fur)" transform="rotate(12 290 148)"/>`;
-  s+=`<circle cx="292" cy="150" r="4.5" fill="var(--paw)" opacity=".7"/>`;
-  s+=`<circle cx="287" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
-  s+=`<circle cx="292" cy="142" r="2.2" fill="var(--paw)" opacity=".6"/>`;
-  s+=`<circle cx="297" cy="144" r="2.2" fill="var(--paw)" opacity=".6"/>`;
-
-  // ===== CONTROLLER DETAILS =====
-  if(C.hasTP) s+=`<rect x="192" y="148" width="56" height="3" rx="1.5" class="light-bar"/>`;
-
-  // Touchpad
-  s+=`<rect x="187" y="155" width="66" height="26" rx="4" class="ctrl-tp" id="btn-17"/>`;
-  s+=`<circle cx="220" cy="165" r="5.5" fill="none" stroke="#3a3a3a" stroke-width=".8"/>`;
-  s+=`<circle cx="217" cy="163" r="1" fill="#444"/>`;
-  s+=`<circle cx="223" cy="163" r="1" fill="#444"/>`;
-  s+=`<path d="M 218,167 L 220,169 L 222,167" stroke="#444" stroke-width=".6" fill="none"/>`;
-
-  // Bumpers
-  s+=`<rect x="128" y="147" width="38" height="10" class="bumper" id="bmp-4"/>`;
-  s+=`<text x="147" y="153" class="btn-lbl">${C.bl}</text>`;
-  s+=`<rect x="274" y="147" width="38" height="10" class="bumper" id="bmp-5"/>`;
-  s+=`<text x="293" y="153" class="btn-lbl">${C.br}</text>`;
-
-  // Trigger labels
-  s+=`<text x="142" y="16" class="trig-val" id="lt-val">${C.tl} 0.00</text>`;
-  s+=`<text x="298" y="16" class="trig-val" id="rt-val">${C.tr} 0.00</text>`;
-
-  // D-pad
-  const dpx=148,dpy=212;
-  s+=`<path d="M ${dpx-8},${dpy-23} L ${dpx+8},${dpy-23} L ${dpx+8},${dpy-8}
-    L ${dpx+23},${dpy-8} L ${dpx+23},${dpy+8} L ${dpx+8},${dpy+8}
-    L ${dpx+8},${dpy+23} L ${dpx-8},${dpy+23} L ${dpx-8},${dpy+8}
-    L ${dpx-23},${dpy+8} L ${dpx-23},${dpy-8} L ${dpx-8},${dpy-8} Z" class="dp-cross"/>`;
-  s+=`<rect x="${dpx-8}" y="${dpy-23}" width="16" height="16" rx="2" class="dp-dir" id="dp-12"/>`;
-  s+=`<rect x="${dpx-8}" y="${dpy+7}" width="16" height="16" rx="2" class="dp-dir" id="dp-13"/>`;
-  s+=`<rect x="${dpx-23}" y="${dpy-8}" width="16" height="16" rx="2" class="dp-dir" id="dp-14"/>`;
-  s+=`<rect x="${dpx+7}" y="${dpy-8}" width="16" height="16" rx="2" class="dp-dir" id="dp-15"/>`;
-  const dirs=[{cx:dpx,cy:dpy-14,id:12},{cx:dpx,cy:dpy+14,id:13},{cx:dpx-14,cy:dpy,id:14},{cx:dpx+14,cy:dpy,id:15}];
-  for(const d of dirs){
-    s+=`<circle cx="${d.cx}" cy="${d.cy}" r="3.2" fill="var(--paw)" opacity=".45" class="dpp dpp-${d.id}"/>`;
-    s+=`<circle cx="${d.cx-2.5}" cy="${d.cy-3.5}" r="1.3" fill="var(--paw)" opacity=".35" class="dpp dpp-${d.id}"/>`;
-    s+=`<circle cx="${d.cx}" cy="${d.cy-4.5}" r="1.3" fill="var(--paw)" opacity=".35" class="dpp dpp-${d.id}"/>`;
-    s+=`<circle cx="${d.cx+2.5}" cy="${d.cy-3.5}" r="1.3" fill="var(--paw)" opacity=".35" class="dpp dpp-${d.id}"/>`;
-  }
-  s+=`<circle cx="${dpx}" cy="${dpy}" r="3" fill="#2a2a2a"/>`;
-
-  // Face buttons
-  const fbx=302,fby=198;
-  const fbOff=[[0,15],[15,0],[-15,0],[0,-15]];
-  for(let i=0;i<4;i++){
-    const cx=fbx+fbOff[i][0],cy=fby+fbOff[i][1];
-    s+=`<g class="fb" id="f-${i}" style="--btn-c:${C.fCol[i]}">`;
-    s+=`<circle cx="${cx}" cy="${cy}" r="11" class="ring" stroke="${C.fCol[i]}"/>`;
-    s+=`<text x="${cx}" y="${cy}" class="fb-lbl" fill="${C.fCol[i]}">${C.face[i]}</text>`;
-    s+=`</g>`;
-  }
-
-  // Sticks
-  const stks=[{cx:178,cy:250,id:'ls'},{cx:262,cy:250,id:'rs'}];
-  for(const st of stks){
-    s+=`<circle cx="${st.cx}" cy="${st.cy}" r="19" fill="#1a1a1a" stroke="var(--ctrl-st)" stroke-width="1"/>`;
-    s+=`<g id="${st.id}-g">`;
-    s+=`<circle cx="${st.cx}" cy="${st.cy}" r="15" class="stick-cap"/>`;
-    s+=`<circle cx="${st.cx}" cy="${st.cy+1}" r="5" fill="var(--paw)" opacity=".6" id="${st.id}-pad"/>`;
-    s+=`<circle cx="${st.cx-4}" cy="${st.cy-4}" r="2.2" fill="var(--paw)" opacity=".5" id="${st.id}-t0"/>`;
-    s+=`<circle cx="${st.cx}" cy="${st.cy-6}" r="2.2" fill="var(--paw)" opacity=".5" id="${st.id}-t1"/>`;
-    s+=`<circle cx="${st.cx+4}" cy="${st.cy-4}" r="2.2" fill="var(--paw)" opacity=".5" id="${st.id}-t2"/>`;
-    s+=`</g>`;
-    s+=`<text x="${st.cx}" y="${st.cy+28}" class="stick-lbl">${st.id==='ls'?'L':'R'}</text>`;
-  }
-
-  // Center buttons
-  s+=`<rect x="186" y="194" width="18" height="8" rx="4" class="cbtn" id="btn-8"/>`;
-  s+=`<text x="195" y="198" class="cbtn-lbl">${C.center[0]}</text>`;
-  s+=`<rect x="236" y="194" width="18" height="8" rx="4" class="cbtn" id="btn-9"/>`;
-  s+=`<text x="245" y="198" class="cbtn-lbl">${C.center[2]}</text>`;
-  s+=`<circle cx="220" cy="232" r="7" class="cbtn" id="btn-16"/>`;
-  s+=`<text x="220" y="232" class="cbtn-lbl" style="font-size:6px">${C.center[1]}</text>`;
-
-  s+=`<text x="220" y="${H-4}" class="status-txt" id="gp-status"></text>`;
-  s+=`</svg>`;
-  return s;
-}
-
-// ==================== DOM ====================
-const canvas=document.getElementById('canvas');
-const noGp=document.getElementById('no-gp');
+const scene=document.getElementById('scene');
+const noGp=document.getElementById('noGp');
 const lockBtn=document.getElementById('lockBtn');
 const lockGlow=document.getElementById('lockGlow');
 const detBadge=document.getElementById('detBadge');
-let isLocked=false;
 
-function setType(t){
-  curType=t;
+function mk(id,src,pos,cls,extra){
+  const img=document.createElement('img');
+  img.id=id;img.src='assets/'+src;img.className=cls||'';
+  img.style.cssText=`position:absolute;left:${pos.l}px;top:${pos.t}px;width:${pos.w}px;height:${pos.h}px;pointer-events:none`;
+  if(extra)Object.assign(img.style,extra);
+  img.dataset.pkey=id;
+  scene.appendChild(img);
+  return img;
+}
+
+let catFaceEl=null;
+/** 方法一：双眼在猫脸容器内用场景坐标 P.eyeL/R 换算为相对定位 */
+function positionEye(k){
+  const p=P[k],c=P.cathead,el=E[k];
+  if(!el||!catFaceEl)return;
+  el.style.left=(p.l-c.l)+'px';
+  el.style.top=(p.t-c.t)+'px';
+  el.style.width=p.w+'px';
+  el.style.height=p.h+'px';
+}
+function mkEyeInFace(id,src){
+  const img=document.createElement('img');
+  img.id=id;img.src='assets/'+src;img.className='cat-eye';img.dataset.pkey=id;
+  catFaceEl.appendChild(img);
+  E[id]=img;
+  positionEye(id);
+  return img;
+}
+
+const E={};
+E.tail=mk('tail','tail.png',P.tail,'z1 tail-anim',{transformOrigin:'40% 100%'});
+(()=>{
+  const ch=P.cathead;
+  catFaceEl=document.createElement('div');
+  catFaceEl.id='catFace';
+  catFaceEl.className='z2 cat-face-wrap';
+  catFaceEl.style.cssText=`position:absolute;left:${ch.l}px;top:${ch.t}px;width:${ch.w}px;height:${ch.h}px;pointer-events:none;transform-origin:50% 85%;overflow:visible`;
+  const head=document.createElement('img');
+  head.id='cathead';
+  head.src='assets/catheadwithouthand.png';
+  head.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none';
+  head.dataset.pkey='cathead';
+  catFaceEl.appendChild(head);
+  scene.appendChild(catFaceEl);
+  E.cathead=head;
+})();
+E.eyeL=mkEyeInFace('eyeL','eye_left_1.png');
+E.eyeR=mkEyeInFace('eyeR','eye_right_1.png');
+E.handL=mk('handL','cathand.png',P.handL,'z-hand',{transform:'scaleX(-1)'});
+E.handR=mk('handR','cathand.png',P.handR,'z-hand');
+mk('body','body.png',{l:0,t:0,w:BW,h:BH},'z10');
+let curScale=1;
+function boostOpCounterForSmallScale(){
+  const el=document.getElementById('opCounter');
+  if(!el)return;
+  const val=document.getElementById('opCounterVal');
+  const baseFs=parseFloat(val?.style?.fontSize)||22;
+  const screenPx=baseFs*curScale;
+  const TARGET=24;
+  if(screenPx<TARGET){
+    const m=Math.min(3.6,TARGET/Math.max(0.06,screenPx));
+    el.style.transform=`scale(${m})`;
+    el.style.transformOrigin='center center';
+  }else{
+    el.style.transform='';
+    el.style.transformOrigin='';
+  }
+}
+function layoutOpCounter(){
+  const el=E.opCounter,p=P.opCounter;
+  if(!el||!p)return;
+  el.style.transform='';
+  el.style.transformOrigin='';
+  el.style.left=p.l+'px';
+  el.style.top=p.t+'px';
+  el.style.width=p.w+'px';
+  el.style.height=p.h+'px';
+  const h=Math.max(20,p.h);
+  const padY=Math.max(3,Math.round(h*0.14));
+  const padX=Math.max(8,Math.round(h*0.22));
+  el.style.padding=padY+'px '+padX+'px';
+  const fsLab=Math.max(11,Math.round(h*0.34));
+  const fsVal=Math.max(18,Math.round(h*0.62));
+  const val=document.getElementById('opCounterVal');
+  const lab=el.querySelector('.op-counter-label');
+  const uni=el.querySelector('.op-counter-unit');
+  if(lab) lab.style.fontSize=fsLab+'px';
+  if(uni) uni.style.fontSize=fsLab+'px';
+  if(val) val.style.fontSize=fsVal+'px';
+  boostOpCounterForSmallScale();
+}
+(()=>{
+  const el=document.createElement('div');
+  el.id='opCounter';
+  el.className='op-counter';
+  el.dataset.pkey='opCounter';
+  el.style.cssText='position:absolute;z-index:17;pointer-events:none';
+  el.innerHTML='<span class="op-counter-label">操作</span> <span class="op-counter-val" id="opCounterVal">0</span> <span class="op-counter-unit">次</span>';
+  scene.appendChild(el);
+  E.opCounter=el;
+  layoutOpCounter();
+})();
+E.bord=mk('bord','bord.png',P.bord,'z11');
+E.dpU=mk('dpU','btn_up.png',P.dpU,'z15');
+E.dpD=mk('dpD','btn_down.png',P.dpD,'z15');
+E.dpL=mk('dpL','btn_left.png',P.dpL,'z15');
+E.dpR=mk('dpR','btn_right.png',P.dpR,'z15');
+E.fbB=mk('fbB','btn_x.png',P.fbB,'z15');
+E.fbR=mk('fbR','btn_round.png',P.fbR,'z15');
+E.fbL=mk('fbL','btn_purple.png',P.fbL,'z15');
+E.fbT=mk('fbT','btn_gree.png',P.fbT,'z15');
+E.stkL=mk('stkL','leg.png',P.stkL,'z-st');
+E.stkR=mk('stkR','leg.png',P.stkR,'z-st');
+E.share=mk('share','menu.png',P.share,'z-cb');
+E.opt=mk('opt','menu.png',P.opt,'z-cb');
+E.home=mk('home','slice_0257_a2384_x484_y868.png',P.home,'z-cb');
+
+function fitScene(){
+  const vw=window.innerWidth,vh=window.innerHeight;
+  const tw=BW+OVER_R,th=BH+OVER_TOP+OVER_BOTTOM;
+  curScale=Math.min(vw/tw,vh/th);
+  scene.style.width=BW+'px';scene.style.height=BH+'px';
+  scene.style.transform=`scale(${curScale})`;
+  scene.style.left=((vw-tw*curScale)/2)+'px';
+  scene.style.top=((vh-th*curScale)/2+OVER_TOP*curScale)+'px';
+  boostOpCounterForSmallScale();
+}
+window.addEventListener('resize',fitScene);
+
+let curType='xbox',gpIdx=null,connected={},isLocked=false;
+
+const BLINK_ANIM_MS=260;
+const BLINK_KB_INTERVAL_MS=10000;
+let blinkBusy=false;
+let kbBlinkInterval=null;
+let prevShoulderL=false,prevShoulderR=false;
+function blinkMotionOk(){
+  try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(_){return true}
+}
+/** 方法一：单次眨眼（动画时长 BLINK_ANIM_MS）；肩键沿触发 + 键盘活跃时每 10s */
+function triggerBlinkOnce(){
+  if(editorOn||!E.eyeL||!blinkMotionOk()||blinkBusy)return;
+  blinkBusy=true;
+  E.eyeL.classList.remove('blinking');
+  E.eyeR.classList.remove('blinking');
+  void E.eyeL.offsetWidth;
+  E.eyeL.classList.add('blinking');
+  E.eyeR.classList.add('blinking');
+  setTimeout(()=>{
+    E.eyeL.classList.remove('blinking');
+    E.eyeR.classList.remove('blinking');
+    E.eyeL.style.transform='';
+    E.eyeR.style.transform='';
+    E.eyeL.style.opacity='';
+    E.eyeR.style.opacity='';
+    blinkBusy=false;
+  },BLINK_ANIM_MS+50);
+}
+function ensureKbBlinkInterval(){
+  if(kbBlinkInterval)return;
+  kbBlinkInterval=setInterval(()=>{
+    if(editorOn||!E.eyeL)return;
+    if(kbActive||Object.keys(keyHandMap).length>0)triggerBlinkOnce();
+  },BLINK_KB_INTERVAL_MS);
+}
+
+let opCountDisplay=0;
+function updateOpCounterUI(){
+  const el=document.getElementById('opCounterVal');
+  if(el) el.textContent=(Number(opCountDisplay)||0).toLocaleString('zh-CN');
+}
+async function loadOperationCount(){
+  try{
+    if(window.overlay) opCountDisplay=await window.overlay.getOperationCount();
+    else opCountDisplay=parseInt(localStorage.getItem('concat_op_count')||'0',10)||0;
+  }catch(_){opCountDisplay=0}
+  updateOpCounterUI();
+}
+function flushOperationCount(delta){
+  const d=Math.max(0,Math.floor(Number(delta)||0));
+  if(d<=0)return;
+  if(window.overlay){
+    window.overlay.addOperationCount(d).then(n=>{opCountDisplay=n;updateOpCounterUI();}).catch(()=>{});
+  }else{
+    opCountDisplay=(parseInt(localStorage.getItem('concat_op_count')||'0',10)||0)+d;
+    localStorage.setItem('concat_op_count',String(opCountDisplay));
+    updateOpCounterUI();
+  }
+}
+
+function showScene(){
   noGp.style.display='none';
-  let c=document.getElementById('svg-wrap');
-  if(!c){c=document.createElement('div');c.id='svg-wrap';
-    c.style.cssText='width:100%;height:100%;display:flex;align-items:center;justify-content:center';
-    canvas.appendChild(c);}
-  c.innerHTML=buildCatSVG(t);
+  scene.style.display='block';
+  fitScene();
+  ensureKbBlinkInterval();
+  loadOperationCount();
 }
 
 lockBtn.addEventListener('click',()=>{
@@ -323,7 +523,7 @@ lockBtn.addEventListener('click',()=>{
   lockBtn.textContent=isLocked?'🔒':'🔓';
   lockBtn.classList.toggle('locked',isLocked);
   lockGlow.classList.toggle('on',isLocked);
-  if(window.overlay) window.overlay.setClickThrough(isLocked);
+  if(window.overlay)window.overlay.setClickThrough(isLocked);
 });
 if(window.overlay){
   window.overlay.onClickThroughChanged(v=>{
@@ -332,115 +532,495 @@ if(window.overlay){
   });
 }
 
-// ==================== RIGHT-CLICK DRAG ====================
-let dragging=false;
+let winDragging=false;
+const ctxMenu=document.getElementById('ctxMenu');
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.addEventListener('mousedown',e=>{if(e.button!==2)return;dragging=true;document.body.classList.add('dragging');
-  if(window.overlay)window.overlay.startDrag(e.screenX,e.screenY);});
-document.addEventListener('mousemove',e=>{if(!dragging)return;if(window.overlay)window.overlay.dragMove(e.screenX,e.screenY);});
-document.addEventListener('mouseup',e=>{if(e.button!==2||!dragging)return;dragging=false;document.body.classList.remove('dragging');
+
+// Left-click drag
+document.addEventListener('mousedown',e=>{
+  if(e.button!==0||editorOn)return;
+  if(ctxMenu.contains(e.target))return;
+  if(e.target.closest('.ctrl-btns'))return;
+  if(e.target.closest('.editor-panel'))return;
+  if(ctxMenu.classList.contains('show')){ctxMenu.classList.remove('show');return}
+  winDragging=true;document.body.classList.add('dragging');
+  if(window.overlay)window.overlay.startDrag(e.screenX,e.screenY);
+});
+document.addEventListener('mousemove',e=>{if(!winDragging)return;if(window.overlay)window.overlay.dragMove(e.screenX,e.screenY);});
+document.addEventListener('mouseup',e=>{if(e.button!==0||!winDragging)return;winDragging=false;document.body.classList.remove('dragging');
   if(window.overlay)window.overlay.dragEnd();});
 
-// ==================== GAMEPAD ====================
+// Right-click context menu
+document.addEventListener('mouseup',e=>{
+  if(e.button!==2)return;
+  if(editorOn)return;
+  e.preventDefault();
+  const mx=e.clientX,my=e.clientY;
+  const mw=176,mh=ctxMenu.offsetHeight||220;
+  const vw=window.innerWidth,vh=window.innerHeight;
+  ctxMenu.style.left=Math.min(mx,vw-mw-4)+'px';
+  ctxMenu.style.top=Math.min(my,vh-mh-4)+'px';
+  ctxMenu.classList.add('show');
+});
+document.addEventListener('mousedown',e=>{
+  if(e.button===0&&ctxMenu.classList.contains('show')&&!ctxMenu.contains(e.target)){
+    ctxMenu.classList.remove('show');
+  }
+});
+
 window.addEventListener('gamepadconnected',e=>{
   connected[e.gamepad.index]=true;
   if(gpIdx===null)gpIdx=e.gamepad.index;
-  const t=detectType(e.gamepad.id);
-  detBadge.textContent=detectLabel(t,e.gamepad.id);
-  setType(t);
+  curType=detectType(e.gamepad.id);
+  detBadge.textContent=detectLabel(curType,e.gamepad.id);
+  showScene();
 });
 window.addEventListener('gamepaddisconnected',e=>{
   delete connected[e.gamepad.index];
   if(gpIdx===e.gamepad.index){const k=Object.keys(connected).map(Number);gpIdx=k.length?k[0]:null;}
-  if(gpIdx===null){noGp.style.display='';detBadge.textContent='';
-    const w=document.getElementById('svg-wrap');if(w)w.remove();
-  } else {const gp=navigator.getGamepads()[gpIdx];
-    if(gp){const t=detectType(gp.id);detBadge.textContent=detectLabel(t,gp.id);setType(t);}}
+  if(gpIdx===null){prevInputSnap=null;noGp.style.display='';scene.style.display='none';detBadge.textContent='';}
+  else{const gp=navigator.getGamepads()[gpIdx];if(gp){curType=detectType(gp.id);detBadge.textContent=detectLabel(curType,gp.id);}}
 });
 
-// ==================== STICK UPDATE ====================
-function updatePaw(id,ax,ay){
-  const pad=document.getElementById(id+'-pad');
-  if(!pad)return;
-  const cx=id==='ls'?178:262, cy=250, range=10;
-  const mx=cx+ax*range, my=cy+ay*range;
-  pad.setAttribute('cx',mx);pad.setAttribute('cy',my+1);
-  const t0=document.getElementById(id+'-t0');
-  const t1=document.getElementById(id+'-t1');
-  const t2=document.getElementById(id+'-t2');
-  if(t0){t0.setAttribute('cx',mx-4);t0.setAttribute('cy',my-4);}
-  if(t1){t1.setAttribute('cx',mx);t1.setAttribute('cy',my-6);}
-  if(t2){t2.setAttribute('cx',mx+4);t2.setAttribute('cy',my-4);}
+const STICK_RANGE=15;
+const TRIG_EDGE=0.35;
+let prevInputSnap=null;
+
+const KB={btns:new Array(18).fill(false),axes:[0,0,0,0]};
+const KMAP={
+  'KeyJ':0,'KeyK':1,'KeyL':2,'KeyI':3,
+  'KeyQ':4,'KeyE':5,'Digit1':6,'Digit2':7,
+  'Tab':8,'Backspace':9,'KeyZ':10,'KeyX':11,
+  'ArrowUp':12,'ArrowDown':13,'ArrowLeft':14,'ArrowRight':15,
+  'KeyH':16,'KeyT':17,
+};
+let kbActive=false;
+document.addEventListener('keydown',e=>{
+  if(e.repeat)return;
+  if(e.code==='F2'){
+    if(window.overlay)return;
+    e.preventDefault();toggleEditor();return;
+  }
+  if(editorOn)return;
+  if(ctxMenu.classList.contains('show'))return;
+
+  if(!window.overlay&&!e.repeat){
+    const modOnly=new Set(['ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight','OSLeft','OSRight','CapsLock','ContextMenu']);
+    if(!modOnly.has(e.code))flushOperationCount(1);
+  }
+
+  const bi=KMAP[e.code];
+  if(bi!==undefined){e.preventDefault();KB.btns[bi]=true;activateKB();return}
+  if(e.code==='KeyW'){KB.axes[1]=-1;activateKB()}
+  if(e.code==='KeyS'){KB.axes[1]=1;activateKB()}
+  if(e.code==='KeyA'){KB.axes[0]=-1;activateKB()}
+  if(e.code==='KeyD'){KB.axes[0]=1;activateKB()}
+  if(e.code==='Numpad8'){KB.axes[3]=-1;activateKB()}
+  if(e.code==='Numpad2'||e.code==='Numpad5'){KB.axes[3]=1;activateKB()}
+  if(e.code==='Numpad4'){KB.axes[2]=-1;activateKB()}
+  if(e.code==='Numpad6'){KB.axes[2]=1;activateKB()}
+});
+document.addEventListener('keyup',e=>{
+  if(editorOn)return;
+  const bi=KMAP[e.code];
+  if(bi!==undefined){KB.btns[bi]=false;return}
+  if(e.code==='KeyW'||e.code==='KeyS')KB.axes[1]=0;
+  if(e.code==='KeyA'||e.code==='KeyD')KB.axes[0]=0;
+  if(e.code==='Numpad8'||e.code==='Numpad2'||e.code==='Numpad5')KB.axes[3]=0;
+  if(e.code==='Numpad4'||e.code==='Numpad6')KB.axes[2]=0;
+});
+function activateKB(){if(!kbActive){kbActive=true;detBadge.textContent='Keyboard · '+CONCAT_EDITION_LABEL;showScene()}}
+
+// ==================== TYPING ANIMATION (Global Keyboard Hook) ====================
+let typingHand=0;
+const keyHandMap={};
+const handKeysCount={L:0,R:0};
+let typingTailTimer=null;
+
+function isModifierVk(c){
+  return c===0x10||c===0x11||c===0x12||c===0x5B||c===0x5C||(c>=0xA0&&c<=0xA5);
+}
+function typeKeyDown(code){
+  if(editorOn)return;
+  if(keyHandMap[code]!==undefined)return;
+  if(!isModifierVk(code))flushOperationCount(1);
+  showScene();
+  if(!detBadge.textContent)detBadge.textContent='Keyboard · '+CONCAT_EDITION_LABEL;
+  const side=typingHand===0?'L':'R';
+  keyHandMap[code]=side;
+  handKeysCount[side]++;
+  liftHand(side,true);
+  typingHand=1-typingHand;
+
+  E.tail.classList.add('active');
+  clearTimeout(typingTailTimer);
 }
 
-// ==================== MAIN LOOP ====================
+function typeKeyUp(code){
+  const side=keyHandMap[code];
+  if(side===undefined)return;
+  delete keyHandMap[code];
+  handKeysCount[side]--;
+  if(handKeysCount[side]<=0){
+    handKeysCount[side]=0;
+    liftHand(side,false);
+  }
+  if(handKeysCount.L===0&&handKeysCount.R===0){
+    typingTailTimer=setTimeout(()=>E.tail.classList.remove('active'),400);
+  }
+}
+
+if(window.overlay){
+  window.overlay.onGlobalKeyDown(keycode=>{
+    if(keycode===0x71)return;
+    typeKeyDown(keycode);
+  });
+  window.overlay.onGlobalKeyUp(keycode=>{
+    if(keycode===0x71)return;
+    typeKeyUp(keycode);
+  });
+  window.overlay.onToggleLayoutEditor(()=>toggleEditor());
+}
+
+const HAND_LIFT=30;
+function liftHand(side,up){
+  const el=side==='L'?E.handL:E.handR;
+  const pk=side==='L'?'handL':'handR';
+  el.style.top=(P[pk].t+(up?-HAND_LIFT:0))+'px';
+}
+
+function applyState(btns,axes,trigL,trigR,isGamepad){
+  if(editorOn)return;
+  const FB_MAP=['fbB','fbR','fbL','fbT'];
+  for(let i=0;i<4;i++){const el=E[FB_MAP[i]];if(el)el.classList.toggle('pressed',!!btns[i])}
+
+  const l1=!!btns[4],r1=!!btns[5];
+  if((l1&&!prevShoulderL)||(r1&&!prevShoulderR))triggerBlinkOnce();
+  prevShoulderL=l1;
+  prevShoulderR=r1;
+
+  liftHand('L',l1);
+  liftHand('R',r1);
+
+  const tilt=(trigR-trigL)*10;
+  if(catFaceEl)catFaceEl.style.transform=`rotate(${tilt}deg)`;
+
+  E.share.classList.toggle('pressed',!!btns[8]);
+  E.opt.classList.toggle('pressed',!!btns[9]);
+  E.home.classList.toggle('pressed',!!btns[16]);
+  E.bord.classList.toggle('show',!!btns[17]);
+
+  E.stkL.classList.toggle('pressed',!!btns[10]);
+  E.stkR.classList.toggle('pressed',!!btns[11]);
+
+  E.dpU.classList.toggle('pressed',!!btns[12]);
+  E.dpD.classList.toggle('pressed',!!btns[13]);
+  E.dpL.classList.toggle('pressed',!!btns[14]);
+  E.dpR.classList.toggle('pressed',!!btns[15]);
+
+  const lx=axes[0]*STICK_RANGE,ly=axes[1]*STICK_RANGE;
+  E.stkL.style.left=(P.stkL.l+lx)+'px';E.stkL.style.top=(P.stkL.t+ly)+'px';
+  const rx=axes[2]*STICK_RANGE,ry=axes[3]*STICK_RANGE;
+  E.stkR.style.left=(P.stkR.l+rx)+'px';E.stkR.style.top=(P.stkR.t+ry)+'px';
+
+  let hasInput=false;
+  for(let i=0;i<btns.length;i++){if(btns[i]){hasInput=true;break;}}
+  if(!hasInput)for(let i=0;i<axes.length;i++){if(Math.abs(axes[i])>0.15){hasInput=true;break;}}
+  if(!hasInput&&(trigL>0.1||trigR>0.1))hasInput=true;
+  E.tail.classList.toggle('active',hasInput);
+
+  if(isGamepad){
+    const b=btns.map(x=>!!x);
+    if(prevInputSnap){
+      let inc=0;
+      for(let i=0;i<18;i++) if(b[i]&&!prevInputSnap.btns[i]) inc++;
+      if(trigL>=TRIG_EDGE&&prevInputSnap.trigL<TRIG_EDGE) inc++;
+      if(trigR>=TRIG_EDGE&&prevInputSnap.trigR<TRIG_EDGE) inc++;
+      if(inc>0) flushOperationCount(inc);
+    }
+    prevInputSnap={btns:b,trigL,trigR};
+  }
+}
+
 function loop(){
   requestAnimationFrame(loop);
-  if(gpIdx===null)return;
-  const gp=navigator.getGamepads()[gpIdx];
-  if(!gp)return;
-  const C=CFG[curType];
-
-  const st=document.getElementById('gp-status');
-  if(st)st.textContent=gp.id.length>36?gp.id.slice(0,36)+'…':gp.id;
-
-  for(let i=0;i<4;i++){const el=document.getElementById(`f-${i}`);if(el)el.classList.toggle('p',gp.buttons[i]?.pressed)}
-
-  const eyeL=document.getElementById('eye-l');
-  const eyeR=document.getElementById('eye-r');
-  if(eyeL){
-    const lb=gp.buttons[4]?.pressed;
-    eyeL.querySelector('.eo').style.opacity=lb?'0':'1';
-    eyeL.querySelector('.ec').style.opacity=lb?'1':'0';
+  if(gpIdx!==null){
+    const gp=navigator.getGamepads()[gpIdx];
+    if(gp){
+      const btns=[];for(let i=0;i<18;i++)btns[i]=gp.buttons[i]?.pressed||false;
+      const axes=[gp.axes[0]||0,gp.axes[1]||0,gp.axes[2]||0,gp.axes[3]||0];
+      applyState(btns,axes,gp.buttons[6]?.value||0,gp.buttons[7]?.value||0,true);
+      return;
+    }
   }
-  if(eyeR){
-    const rb=gp.buttons[5]?.pressed;
-    eyeR.querySelector('.eo').style.opacity=rb?'0':'1';
-    eyeR.querySelector('.ec').style.opacity=rb?'1':'0';
+  if(kbActive){
+    applyState(KB.btns,KB.axes,KB.btns[6]?1:0,KB.btns[7]?1:0,false);
   }
-  const bL=document.getElementById('bmp-4'),bR=document.getElementById('bmp-5');
-  if(bL)bL.classList.toggle('p',gp.buttons[4]?.pressed);
-  if(bR)bR.classList.toggle('p',gp.buttons[5]?.pressed);
-
-  const lt=gp.buttons[6]?.value||0, rt=gp.buttons[7]?.value||0;
-  const earL=document.getElementById('ear-l'),earR=document.getElementById('ear-r');
-  if(earL)earL.style.transform=`rotate(${-lt*25}deg)`;
-  if(earR)earR.style.transform=`rotate(${rt*25}deg)`;
-  const ltV=document.getElementById('lt-val'),rtV=document.getElementById('rt-val');
-  if(ltV)ltV.textContent=`${C.tl} ${lt.toFixed(2)}`;
-  if(rtV)rtV.textContent=`${C.tr} ${rt.toFixed(2)}`;
-
-  for(const bi of [8,9,16,17]){const el=document.getElementById(`btn-${bi}`);if(el&&gp.buttons[bi])el.classList.toggle('p',gp.buttons[bi].pressed)}
-
-  const lsPad=document.getElementById('ls-pad'),rsPad=document.getElementById('rs-pad');
-  if(lsPad&&gp.buttons[10])lsPad.setAttribute('r',gp.buttons[10].pressed?'7':'5');
-  if(rsPad&&gp.buttons[11])rsPad.setAttribute('r',gp.buttons[11].pressed?'7':'5');
-
-  for(let i=12;i<=15;i++){
-    const el=document.getElementById(`dp-${i}`);
-    const p=gp.buttons[i]?.pressed;
-    if(el)el.classList.toggle('p',p);
-    document.querySelectorAll(`.dpp-${i}`).forEach(pw=>pw.setAttribute('opacity',p?'1':'.45'));
-  }
-
-  if(gp.axes.length>=2)updatePaw('ls',gp.axes[0],gp.axes[1]);
-  if(gp.axes.length>=4)updatePaw('rs',gp.axes[2],gp.axes[3]);
 }
 requestAnimationFrame(loop);
+
+// ==================== CONTEXT MENU LOGIC ====================
+let menuOnTop=true,menuScale=1;
+
+async function initMenu(){
+  if(window.overlay){
+    menuOnTop=await window.overlay.getAlwaysOnTop();
+    menuScale=await window.overlay.getScale();
+  }
+  refreshMenuUI();
+}
+
+function refreshMenuUI(){
+  const chk=document.getElementById('ctxOnTopCheck');
+  chk.classList.toggle('on',menuOnTop);
+  chk.textContent=menuOnTop?'✓':'';
+  document.querySelectorAll('.ctx-scale').forEach(item=>{
+    const s=parseFloat(item.dataset.scale);
+    item.querySelector('.ctx-radio').classList.toggle('on',s===menuScale);
+  });
+}
+
+document.getElementById('ctxOnTop').addEventListener('click',()=>{
+  menuOnTop=!menuOnTop;
+  if(window.overlay)window.overlay.setAlwaysOnTop(menuOnTop);
+  refreshMenuUI();
+});
+
+document.querySelectorAll('.ctx-scale').forEach(item=>{
+  item.addEventListener('click',()=>{
+    menuScale=parseFloat(item.dataset.scale);
+    if(window.overlay)window.overlay.setScale(menuScale);
+    refreshMenuUI();
+    ctxMenu.classList.remove('show');
+  });
+});
+
+initMenu();
+
+// ==================== EDITOR MODE ====================
+let editorOn=false,edDrag=null,edSel=null;
+const edPanel=document.getElementById('editorPanel');
+
+const ED_NAMES={
+  cathead:'猫头 cathead',tail:'尾巴 tail',
+  eyeL:'左眼',eyeR:'右眼',
+  handL:'左手 handL',handR:'右手 handR',
+  bord:'触摸板 bord',
+  dpU:'方向↑',dpD:'方向↓',dpL:'方向←',dpR:'方向→',
+  fbT:'△ Triangle',fbR:'○ Circle',fbB:'× Cross',fbL:'□ Square',
+  stkL:'左摇杆 L',stkR:'右摇杆 R',
+  share:'Share',opt:'Options',home:'Home/PS',
+  opCounter:'操作计数器',
+};
+
+function toggleEditor(){
+  prevInputSnap=null;
+  editorOn=!editorOn;
+  edPanel.classList.toggle('show',editorOn);
+  if(editorOn){
+    if(E.eyeL){
+      E.eyeL.classList.remove('blinking');E.eyeR.classList.remove('blinking');
+      E.eyeL.style.transform='';E.eyeR.style.transform='';
+      E.eyeL.style.opacity='';E.eyeR.style.opacity='';
+      blinkBusy=false;
+      E.eyeL.classList.add('cat-eye-edit');E.eyeR.classList.add('cat-eye-edit');
+    }
+    showScene();
+    Object.values(E).forEach(el=>el.classList.add('editable'));
+    buildPanel();
+  }else{
+    if(E.eyeL){E.eyeL.classList.remove('cat-eye-edit');E.eyeR.classList.remove('cat-eye-edit')}
+    Object.values(E).forEach(el=>{el.classList.remove('editable','ed-sel')});
+    document.querySelectorAll('.ed-label').forEach(l=>l.remove());
+    edSel=null;
+  }
+}
+
+function buildPanel(){
+  let h='<div style="display:flex;justify-content:space-between;align-items:center"><h3>布局编辑器</h3><span class="ep-hint">F2关闭 · 拖动移动 · 滚轮/Ctrl+方向键调大小 · 「操作计数器」调位置与显示大小</span></div>';
+  h+='<div class="ep-detail" id="edDetail">';
+  h+='<span id="edDetailName" style="color:#7dd3fc;min-width:60px">未选中</span>';
+  h+='<div class="ed-field"><label>X</label><input id="edInpL" type="number"><label>Y</label><input id="edInpT" type="number"></div>';
+  h+='<div class="ed-field"><label>W</label><button class="ed-sz-btn" data-d="w" data-v="-5">−</button><input id="edInpW" type="number"><button class="ed-sz-btn" data-d="w" data-v="5">+</button></div>';
+  h+='<div class="ed-field"><label>H</label><button class="ed-sz-btn" data-d="h" data-v="-5">−</button><input id="edInpH" type="number"><button class="ed-sz-btn" data-d="h" data-v="5">+</button></div>';
+  h+='</div>';
+  h+='<div class="ep-grid">';
+  for(const k of Object.keys(PKEY_MAP)){
+    const p=P[k];
+    h+=`<div class="ep-row" data-k="${k}"><span class="ep-name">${ED_NAMES[k]||k}</span><span class="ep-val" id="ev-${k}">${p.l},${p.t} ${p.w}×${p.h}</span></div>`;
+  }
+  h+='</div>';
+  h+=`<div class="ep-btns"><button class="ep-btn" id="edCopy">📋 复制坐标</button><button class="ep-btn" id="edApply">💾 复制完整P对象</button></div>`;
+  edPanel.innerHTML=h;
+
+  edPanel.querySelectorAll('.ep-row').forEach(row=>{
+    row.addEventListener('click',()=>{selectEl(row.dataset.k)});
+  });
+  edPanel.querySelectorAll('.ed-sz-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(!edSel)return;
+      const p=P[edSel],d=btn.dataset.d,v=parseInt(btn.dataset.v);
+      if(d==='w'){const ratio=p.h/p.w;p.w=Math.max(10,p.w+v);p.h=Math.round(p.w*ratio)}
+      else{const ratio=p.w/p.h;p.h=Math.max(10,p.h+v);p.w=Math.round(p.h*ratio)}
+      applyPos(edSel);refreshDetail();
+    });
+  });
+  ['edInpL','edInpT','edInpW','edInpH'].forEach(id=>{
+    document.getElementById(id).addEventListener('change',e=>{
+      if(!edSel)return;
+      const p=P[edSel],val=parseInt(e.target.value)||0;
+      if(id==='edInpL')p.l=val;else if(id==='edInpT')p.t=val;
+      else if(id==='edInpW')p.w=Math.max(10,val);else if(id==='edInpH')p.h=Math.max(10,val);
+      applyPos(edSel);
+    });
+  });
+  document.getElementById('edCopy').addEventListener('click',copyPositions);
+  document.getElementById('edApply').addEventListener('click',applyToFile);
+}
+
+function selectEl(k){
+  Object.values(E).forEach(el=>el.classList.remove('ed-sel'));
+  edPanel.querySelectorAll('.ep-row').forEach(r=>r.classList.remove('sel'));
+  edSel=k;
+  if(E[k])E[k].classList.add('ed-sel');
+  const row=edPanel.querySelector(`[data-k="${k}"]`);
+  if(row)row.classList.add('sel');
+  refreshDetail();
+}
+
+function refreshDetail(){
+  const detail=document.getElementById('edDetail');
+  if(!edSel){detail.classList.remove('show');return}
+  detail.classList.add('show');
+  document.getElementById('edDetailName').textContent=ED_NAMES[edSel]||edSel;
+  const p=P[edSel];
+  document.getElementById('edInpL').value=p.l;
+  document.getElementById('edInpT').value=p.t;
+  document.getElementById('edInpW').value=p.w;
+  document.getElementById('edInpH').value=p.h;
+}
+
+function updateVal(k){
+  const p=P[k];
+  const v=document.getElementById('ev-'+k);
+  if(v)v.textContent=`${p.l},${p.t} ${p.w}×${p.h}`;
+  if(edSel===k)refreshDetail();
+}
+
+function applyPos(k){
+  if(k==='cathead'){
+    const p=P.cathead;
+    if(catFaceEl){
+      catFaceEl.style.left=p.l+'px';
+      catFaceEl.style.top=p.t+'px';
+      catFaceEl.style.width=p.w+'px';
+      catFaceEl.style.height=p.h+'px';
+    }
+    positionEye('eyeL');positionEye('eyeR');
+    updateVal('cathead');
+    return;
+  }
+  if(k==='eyeL'||k==='eyeR'){positionEye(k);updateVal(k);return}
+  if(k==='opCounter'){layoutOpCounter();updateVal(k);return}
+  const el=E[k],p=P[k];if(!el)return;
+  el.style.left=p.l+'px';el.style.top=p.t+'px';
+  el.style.width=p.w+'px';el.style.height=p.h+'px';
+  updateVal(k);
+}
+
+scene.addEventListener('mousedown',e=>{
+  if(!editorOn||e.button!==0)return;
+  const el=e.target.closest('[data-pkey]');
+  if(!el)return;
+  const k=el.dataset.pkey;
+  if(!P[k])return;
+  selectEl(k);
+  e.preventDefault();
+  const startX=e.clientX,startY=e.clientY;
+  const origL=P[k].l,origT=P[k].t;
+  const onMove=ev=>{
+    const dx=(ev.clientX-startX)/curScale;
+    const dy=(ev.clientY-startY)/curScale;
+    P[k].l=Math.round(origL+dx);
+    P[k].t=Math.round(origT+dy);
+    applyPos(k);refreshDetail();
+  };
+  const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp)};
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+});
+
+scene.addEventListener('wheel',e=>{
+  if(!editorOn||!edSel)return;
+  e.preventDefault();
+  const k=edSel,p=P[k];
+  const ratio=p.h/p.w;
+  const delta=e.deltaY>0?-5:5;
+  p.w=Math.max(10,p.w+delta);
+  p.h=Math.round(p.w*ratio);
+  applyPos(k);refreshDetail();
+},{passive:false});
+
+document.addEventListener('keydown',e=>{
+  if(!editorOn||!edSel)return;
+  const k=edSel,p=P[k];
+  const step=e.shiftKey?10:1;
+  if(e.ctrlKey){
+    const ratio=p.h/p.w;
+    if(e.code==='ArrowRight'){p.w=Math.max(10,p.w+step);p.h=Math.round(p.w*ratio);applyPos(k);e.preventDefault()}
+    if(e.code==='ArrowLeft'){p.w=Math.max(10,p.w-step);p.h=Math.round(p.w*ratio);applyPos(k);e.preventDefault()}
+    if(e.code==='ArrowDown'){p.h=Math.max(10,p.h+step);p.w=Math.round(p.h/ratio);applyPos(k);e.preventDefault()}
+    if(e.code==='ArrowUp'){p.h=Math.max(10,p.h-step);p.w=Math.round(p.h/ratio);applyPos(k);e.preventDefault()}
+    return;
+  }
+  if(e.code==='ArrowLeft'){p.l-=step;applyPos(k);e.preventDefault()}
+  if(e.code==='ArrowRight'){p.l+=step;applyPos(k);e.preventDefault()}
+  if(e.code==='ArrowUp'){p.t-=step;applyPos(k);e.preventDefault()}
+  if(e.code==='ArrowDown'){p.t+=step;applyPos(k);e.preventDefault()}
+});
+
+function copyPositions(){
+  let s='const P={\n';
+  for(const k of Object.keys(PKEY_MAP)){
+    const p=P[k];
+    s+=`  ${(k+':').padEnd(8)}{l:${p.l},t:${p.t},w:${p.w},h:${p.h}},\n`;
+  }
+  s+='};';
+  navigator.clipboard.writeText(s).then(()=>{
+    const btn=document.getElementById('edCopy');
+    btn.textContent='✅ 已复制!';setTimeout(()=>btn.textContent='📋 复制坐标到剪贴板',1500);
+  });
+}
+
+function applyToFile(){
+  const btn=document.getElementById('edApply');
+  btn.textContent='⏳ ...';
+  let s='const P={\n';
+  for(const k of Object.keys(PKEY_MAP)){
+    const p=P[k];
+    s+=`  ${(k+':').padEnd(8)}{l:${p.l},t:${p.t},w:${p.w},h:${p.h}},\n`;
+  }
+  s+='};';
+  navigator.clipboard.writeText(s).then(()=>{
+    btn.textContent='✅ 已复制坐标，粘贴到代码中替换 P 对象即可';
+    setTimeout(()=>btn.textContent='💾 应用并写入文件 (Electron)',2000);
+  });
+}
 
 // ==================== INIT ====================
 if(!window.overlay){
   document.documentElement.classList.add('preview');
-  setType('xbox');
+  showScene();
   const bar=document.createElement('div');
   bar.style.cssText='position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:99';
   ['xbox','ps4','ps5','switch'].forEach(t=>{
     const b=document.createElement('button');b.textContent=t.toUpperCase();
     b.style.cssText='padding:4px 12px;border:1px solid #444;border-radius:6px;background:#2a2a3e;color:#ddd;cursor:pointer;font-size:11px;font-weight:600';
-    b.onclick=()=>setType(t);bar.appendChild(b);
+    b.onclick=()=>{curType=t;detBadge.textContent=t.toUpperCase()};
+    bar.appendChild(b);
   });
   document.body.appendChild(bar);
-} else {
+}else{
   noGp.style.display='';
 }
 </script>

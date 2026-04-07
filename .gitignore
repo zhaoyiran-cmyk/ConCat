@@ -1,9 +1,12 @@
 node_modules/
 dist/
+dist-v*/
 release/
+release*/
+out/
+out-*/
 build-out/
 build-out2/
-out/
 *.exe
 *.blockmap
 *.yaml

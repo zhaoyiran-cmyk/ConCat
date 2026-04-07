@@ -1,7 +1,7 @@
 {
   "name": "con-cat",
-  "version": "1.0.0",
-  "description": "ConCat - Cute cat gamepad overlay for gaming",
+  "version": "1.2.2",
+  "description": "ConCat — PlayStation DS4 edition overlay; Xbox, Switch, and keyboard editions planned",
   "author": "ConCat",
   "main": "main.js",
   "scripts": {
@@ -12,7 +12,6 @@
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   },
-  "dependencies": {},
   "build": {
     "appId": "com.concat.overlay",
     "productName": "ConCat",
@@ -21,11 +20,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png",
@@ -44,10 +47,11 @@
     "files": [
       "main.js",
       "preload.js",
-      "overlay.html"
+      "overlay.html",
+      "assets/**/*"
     ],
     "directories": {
-      "output": "build-out2"
+      "output": "release122"
     }
   }
 }

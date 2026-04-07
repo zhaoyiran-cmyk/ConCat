@@ -1,9 +1,10 @@
-const { app, BrowserWindow, globalShortcut, Tray, Menu, nativeImage, ipcMain } = require('electron');
+/** ConCat 主进程 — 当前发行线：PlayStation DS4 皮肤；Xbox / Switch / 键盘专版后续可拆分为独立构建或运行时切换。 */
+const { app, BrowserWindow, globalShortcut, Tray, Menu, nativeImage, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const STORE_PATH = path.join(app.getPath('userData'), 'settings.json');
-const DEFAULTS = { bounds: { width: 420, height: 300 }, opacity: 0.92, clickThrough: false };
+const DEFAULTS = { bounds: { width: 520, height: 450 }, opacity: 0.92, clickThrough: false, alwaysOnTop: true, scale: 1.0, operationCount: 0 };
 
 function loadStore() {
   try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) }; }
@@ -22,6 +23,7 @@ let isClickThrough = store.get('clickThrough');
 function createWindow() {
   const saved = store.get('bounds');
 
+  const isOnTop = store.get('alwaysOnTop');
   win = new BrowserWindow({
     width: saved.width,
     height: saved.height,
@@ -31,7 +33,7 @@ function createWindow() {
     minHeight: 190,
     transparent: true,
     frame: false,
-    alwaysOnTop: true,
+    alwaysOnTop: isOnTop,
     hasShadow: false,
     skipTaskbar: false,
     resizable: true,
@@ -42,7 +44,7 @@ function createWindow() {
     }
   });
 
-  win.setAlwaysOnTop(true, 'screen-saver');
+  if (isOnTop) win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true);
   win.setOpacity(store.get('opacity'));
   win.loadFile('overlay.html');
@@ -134,6 +136,76 @@ app.whenReady().then(() => {
 
   globalShortcut.register('Ctrl+Shift+G', toggleClickThrough);
   globalShortcut.register('Ctrl+Shift+H', toggleVisibility);
+  if (!globalShortcut.register('F2', () => {
+    if (win && !win.isDestroyed()) win.webContents.send('toggle-layout-editor');
+  })) console.warn('ConCat: F2 global shortcut not registered (may be in use by another app)');
+
+  try {
+    const { spawn } = require('child_process');
+    const psScript = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
+public class KBHook {
+    private delegate IntPtr LLKProc(int c, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id, LLKProc cb, IntPtr hMod, uint tid);
+    [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hk, int c, IntPtr w, IntPtr l);
+    [DllImport("kernel32.dll")] static extern IntPtr GetModuleHandle(string n);
+    [DllImport("user32.dll")] static extern bool GetMessage(out MSG m, IntPtr h, uint mn, uint mx);
+    [StructLayout(LayoutKind.Sequential)] public struct KBDLL { public int vkCode; public int scanCode; public int flags; public int time; public IntPtr extra; }
+    [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam; public IntPtr lParam; public uint time; public int x; public int y; }
+    static IntPtr hook = IntPtr.Zero;
+    static LLKProc proc = HookCB;
+    static IntPtr HookCB(int c, IntPtr w, IntPtr l) {
+        if (c >= 0) {
+            KBDLL k = Marshal.PtrToStructure<KBDLL>(l);
+            int wv = w.ToInt32();
+            string state = (wv == 0x100 || wv == 0x104) ? "DOWN" : "UP";
+            Console.WriteLine(state + "\\t" + k.vkCode);
+            Console.Out.Flush();
+        }
+        return CallNextHookEx(hook, c, w, l);
+    }
+    public static void Run() {
+        using (var p = Process.GetCurrentProcess())
+        using (var m = p.MainModule) {
+            hook = SetWindowsHookEx(13, proc, GetModuleHandle(m.ModuleName), 0);
+        }
+        MSG msg;
+        while (GetMessage(out msg, IntPtr.Zero, 0, 0)) {}
+    }
+}
+"@ -ReferencedAssemblies System.dll
+[KBHook]::Run()
+`;
+    const keyProc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true
+    });
+    let lineBuf = '';
+    keyProc.stdout.on('data', (data) => {
+      lineBuf += data.toString();
+      const lines = lineBuf.split('\n');
+      lineBuf = lines.pop();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const parts = trimmed.split('\t');
+        if (parts.length < 2) continue;
+        const state = parts[0];
+        const vKey = parseInt(parts[1], 10);
+        if (!win || isNaN(vKey)) continue;
+        if (state === 'DOWN') win.webContents.send('global-keydown', vKey);
+        else if (state === 'UP') win.webContents.send('global-keyup', vKey);
+      }
+    });
+    keyProc.stderr.on('data', (d) => console.error('KeyHook stderr:', d.toString()));
+    keyProc.on('error', (err) => console.error('KeyHook error:', err));
+    app.on('will-quit', () => { try { keyProc.kill(); } catch {} });
+  } catch (err) {
+    console.error('global-key-listener init failed:', err);
+  }
 });
 
 app.on('will-quit', () => {
@@ -165,4 +237,40 @@ ipcMain.on('drag-move', (_e, mx, my) => {
 ipcMain.on('drag-end', () => {
   dragStart = null;
   saveBounds();
+});
+
+ipcMain.on('set-always-on-top', (_e, val) => {
+  store.set('alwaysOnTop', val);
+  if (win) {
+    win.setAlwaysOnTop(val, val ? 'screen-saver' : undefined);
+  }
+});
+ipcMain.handle('get-always-on-top', () => store.get('alwaysOnTop'));
+
+let baseSize = null;
+ipcMain.on('set-scale', (_e, scale) => {
+  store.set('scale', scale);
+  if (!win) return;
+  if (!baseSize) baseSize = { w: 520, h: 450 };
+  const newW = Math.round(baseSize.w * scale);
+  const newH = Math.round(baseSize.h * scale);
+  const bounds = win.getBounds();
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  win.setBounds({
+    x: Math.round(cx - newW / 2),
+    y: Math.round(cy - newH / 2),
+    width: newW,
+    height: newH,
+  });
+});
+ipcMain.handle('get-scale', () => store.get('scale') || 1.0);
+
+ipcMain.handle('get-operation-count', () => Number(store.get('operationCount')) || 0);
+ipcMain.handle('add-operation-count', (_e, delta) => {
+  const d = Math.max(0, Math.floor(Number(delta) || 0));
+  if (d === 0) return Number(store.get('operationCount')) || 0;
+  const next = (Number(store.get('operationCount')) || 0) + d;
+  store.set('operationCount', next);
+  return next;
 });
