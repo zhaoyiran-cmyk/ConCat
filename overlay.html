@@ -7,32 +7,16 @@
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body{
   background:transparent;overflow:hidden;
-  width:100%;height:100%;user-select:none;cursor:default;
+  width:100%;height:100%;user-select:none;cursor:default;touch-action:manipulation;
   font-family:'Segoe UI',system-ui,sans-serif;
 }
 html.preview{background:#1a1a2e}
 body.dragging{cursor:grabbing}
 
-.ctrl-strip{
-  position:absolute;top:0;left:0;right:0;height:32px;z-index:200;display:flex;
-  align-items:flex-start;justify-content:flex-end;box-sizing:border-box;padding:3px 4px 0;pointer-events:none;
-}
-.ctrl-strip-spacer{flex:1;min-width:0;align-self:stretch}
-body.ct-through .ctrl-strip{pointer-events:auto}
 body.ct-through .scene{pointer-events:none}
 body.ct-through .scene img.editable,
 body.ct-through .scene .op-counter.editable{pointer-events:auto!important}
 body.ct-through #noGp{pointer-events:auto}
-.ctrl-btns{display:flex;gap:3px;flex-shrink:0}
-.ctrl-btns button{
-  width:20px;height:20px;border:none;border-radius:50%;font-size:10px;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  background:rgba(60,60,60,.3);color:#999;transition:all .15s;line-height:1;
-}
-.ctrl-btns button:hover{background:rgba(60,60,60,.5)}
-.ctrl-btns button.locked{background:#e879a8;color:#fff}
-.lock-glow{position:absolute;inset:0;pointer-events:none;border:2px solid transparent;border-radius:8px;transition:border-color .3s;z-index:199}
-.lock-glow.on{border-color:rgba(232,121,168,.35)}
 .det-badge{position:absolute;top:4px;left:6px;font-size:8px;font-weight:700;color:#888;letter-spacing:.04em;opacity:.6;pointer-events:none;z-index:200}
 
 .no-gp{
@@ -205,25 +189,18 @@ body.ct-through #noGp{pointer-events:auto}
 </style>
 </head>
 <body>
-<div class="ctrl-strip" id="ctrlStrip">
-  <span class="ctrl-strip-spacer" aria-hidden="true"></span>
-  <div class="ctrl-btns">
-    <button id="lockBtn" title="锁定后：移回顶部栏可点解锁，或托盘/Ctrl+Shift+G">🔓</button>
-  </div>
-</div>
-<div class="lock-glow" id="lockGlow"></div>
 <div class="det-badge" id="detBadge"></div>
 
 <div id="noGp" class="no-gp">
   <div class="icon">🐱</div>
-  <div>连接手柄或按键盘启动</div>
+  <div>猫猫常驻显示；连接手柄或按键后显示设备与操作计数</div>
   <div class="hint">键盘: WASD=左摇杆 · W 同时作为十字键上 · QWER=十字键（Q左 W上 E右 R下）</div>
   <div class="hint">JKL;=△○□× · UI=L1R1 · TY=L2R2 · ZX=L3R3 · G=触摸板 · H=Home · Tab/BS=Share/Opt</div>
   <div class="hint" style="opacity:.78">加键: 方向键/小键盘8426=右摇杆 · VBNM=面键备用 · FC=肩键备用 · 数字12=扳机备用 · []=L3R3备用 · 斜杠/引号/重音符=Share/Option/Home · P=触摸板 · 空格=Home</div>
   <div class="hint" style="opacity:.65">桌面版：按键由系统键盘钩子驱动（与焦点无关）；插着手柄时键盘会与手柄显示合并。</div>
   <div class="hint" style="margin-top:2px;opacity:.85">当前发行线：<b style="color:#f0a0b8">索尼 DS4 / PlayStation 布局</b> · Xbox / Switch / 键盘专版规划中</div>
   <div class="hint" style="margin-top:4px;color:#f0a0b8">F2 = 布局编辑器（全局快捷键，无需点中窗口）</div>
-  <div class="hint" style="margin-top:2px;opacity:.75">连接手柄或键盘模拟后显示「操作 N 次」；<strong>F2</strong> 可选中「操作计数器」拖动位置，滚轮/Ctrl+方向键调宽高（字号随高度变化）</div>
+  <div class="hint" style="margin-top:2px;opacity:.75">有输入后显示「操作 N 次」；<strong>F2</strong> 可选中「操作计数器」拖动位置，滚轮/Ctrl+方向键调宽高（字号随高度变化）</div>
 </div>
 
 <div class="ctx-menu" id="ctxMenu">
@@ -318,8 +295,6 @@ const PKEY_MAP={
 
 const scene=document.getElementById('scene');
 const noGp=document.getElementById('noGp');
-const lockBtn=document.getElementById('lockBtn');
-const lockGlow=document.getElementById('lockGlow');
 const detBadge=document.getElementById('detBadge');
 const ctxMenu=document.getElementById('ctxMenu');
 
@@ -536,7 +511,6 @@ let lastClientX=0,lastClientY=0;
 function noGpVisible(){try{return getComputedStyle(noGp).display!=='none'}catch(_){return false}}
 function isClickThroughInteractiveTarget(el){
   if(!el||el===document.body||el===document.documentElement)return false;
-  if(el.closest('.ctrl-strip'))return true;
   if(el.closest('.editor-panel.show'))return true;
   if(ctxMenu.classList.contains('show')&&el.closest('#ctxMenu'))return true;
   if(noGpVisible()&&el.closest('#noGp'))return true;
@@ -552,20 +526,11 @@ function syncClickThroughMouseHit(clientX,clientY){
   lastMouseHitIgnore=wantIgnore;
   window.overlay.setMouseIgnoreHit(wantIgnore,wantIgnore);
 }
-function setLockedUi(v){
+function syncClickThroughFromMain(v){
   isLocked=v;
-  lockBtn.textContent=v?'🔒':'🔓';
-  lockBtn.classList.toggle('locked',v);
-  lockGlow.classList.toggle('on',v);
   document.body.classList.toggle('ct-through',v);
   if(!v)lastMouseHitIgnore=null;
 }
-lockBtn.addEventListener('click',(ev)=>{
-  const v=!isLocked;
-  setLockedUi(v);
-  if(window.overlay)window.overlay.setClickThrough(v);
-  if(v)requestAnimationFrame(()=>syncClickThroughMouseHit(ev.clientX,ev.clientY));
-});
 document.addEventListener('mousemove',e=>{
   lastClientX=e.clientX;lastClientY=e.clientY;
   if(!isLocked)return;
@@ -583,12 +548,12 @@ document.documentElement.addEventListener('mouseleave',()=>{
 if(window.overlay){
   window.overlay.getClickThrough().then(v=>{
     if(v){
-      setLockedUi(true);
+      syncClickThroughFromMain(true);
       requestAnimationFrame(()=>syncClickThroughMouseHit(lastClientX,lastClientY));
     }
   }).catch(()=>{});
   window.overlay.onClickThroughChanged(v=>{
-    setLockedUi(v);
+    syncClickThroughFromMain(v);
     if(v)requestAnimationFrame(()=>syncClickThroughMouseHit(lastClientX,lastClientY));
   });
 }
@@ -596,13 +561,19 @@ if(window.overlay){
 let winDragging=false;
 document.addEventListener('contextmenu',e=>e.preventDefault());
 
-// Left-click drag
+// Left-click drag（右键菜单内事件不冒泡，避免误开始拖窗 / 与菜单项冲突）
+ctxMenu.addEventListener('mousedown',e=>e.stopPropagation());
+ctxMenu.addEventListener('mouseup',e=>e.stopPropagation());
+document.addEventListener('wheel',e=>{
+  if(e.ctrlKey)e.preventDefault();
+},{passive:false});
+// Left-click拖窗：preventDefault 减少误触系统缩放/拖影；窗口尺寸仅由右键菜单倍率（主进程 setBounds）改变
 document.addEventListener('mousedown',e=>{
   if(e.button!==0||editorOn)return;
   if(ctxMenu.contains(e.target))return;
-  if(e.target.closest('.ctrl-btns'))return;
   if(e.target.closest('.editor-panel'))return;
   if(ctxMenu.classList.contains('show')){ctxMenu.classList.remove('show');return}
+  e.preventDefault();
   winDragging=true;document.body.classList.add('dragging');
   if(window.overlay)window.overlay.startDrag(e.screenX,e.screenY);
 });
@@ -638,13 +609,15 @@ window.addEventListener('gamepadconnected',e=>{
 window.addEventListener('gamepaddisconnected',e=>{
   delete connected[e.gamepad.index];
   if(gpIdx===e.gamepad.index){const k=Object.keys(connected).map(Number);gpIdx=k.length?k[0]:null;}
-  if(gpIdx===null){prevInputSnap=null;noGp.style.display='';scene.style.display='none';detBadge.textContent='';}
+  if(gpIdx===null){prevInputSnap=null;detBadge.textContent='';showScene();}
   else{const gp=navigator.getGamepads()[gpIdx];if(gp){curType=detectType(gp.id);detBadge.textContent=detectLabel(curType,gp.id);}}
 });
 
 const STICK_RANGE=15;
 const TRIG_EDGE=0.35;
 let prevInputSnap=null;
+const IDLE_BTNS=new Array(18).fill(false);
+const IDLE_AXES=[0,0,0,0];
 
 const KB={btns:new Array(18).fill(false),axes:[0,0,0,0]};
 const btnKeyHolds=Array.from({length:18},()=>new Set());
@@ -905,7 +878,9 @@ function loop(){
   }
   if(kbActive){
     applyState(KB.btns,KB.axes,KB.btns[6]?1:0,KB.btns[7]?1:0,false);
+    return;
   }
+  applyState(IDLE_BTNS,IDLE_AXES,0,0,false);
 }
 requestAnimationFrame(loop);
 
@@ -937,7 +912,9 @@ document.getElementById('ctxOnTop').addEventListener('click',()=>{
 });
 
 document.querySelectorAll('.ctx-scale').forEach(item=>{
-  item.addEventListener('click',()=>{
+  item.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(!ctxMenu.classList.contains('show'))return;
     menuScale=parseFloat(item.dataset.scale);
     if(window.overlay)window.overlay.setScale(menuScale);
     refreshMenuUI();
@@ -1171,7 +1148,7 @@ if(!window.overlay){
   });
   document.body.appendChild(bar);
 }else{
-  noGp.style.display='';
+  showScene();
 }
 </script>
 </body>

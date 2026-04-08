@@ -35,8 +35,11 @@ function createWindow() {
     frame: false,
     alwaysOnTop: isOnTop,
     hasShadow: false,
-    skipTaskbar: false,
-    resizable: true,
+    skipTaskbar: true,
+    /** 禁止拖拽边缘改窗口大小；否则会触发 resize → fitScene 重算 curScale，看起来像「点住放大」 */
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -55,6 +58,12 @@ function createWindow() {
 
   win.webContents.once('did-finish-load', () => {
     if (!win || win.isDestroyed()) return;
+    try {
+      win.webContents.setZoomFactor(1);
+      if (typeof win.webContents.setVisualZoomLevelLimits === 'function') {
+        win.webContents.setVisualZoomLevelLimits(1, 1);
+      }
+    } catch (_) {}
     win.webContents.send('click-through-changed', isClickThrough);
   });
 
@@ -85,11 +94,6 @@ function toggleVisibility() {
   updateTrayMenu();
 }
 
-function setOpacity(val) {
-  store.set('opacity', val);
-  if (win) win.setOpacity(val);
-}
-
 function createTrayIcon() {
   const iconPath = path.join(__dirname, 'icon.png');
   if (fs.existsSync(iconPath)) return nativeImage.createFromPath(iconPath);
@@ -104,22 +108,8 @@ function updateTrayMenu() {
   if (!tray) return;
   const visible = win && win.isVisible();
   const menu = Menu.buildFromTemplate([
-    { label: visible ? 'Hide Overlay' : 'Show Overlay', click: toggleVisibility },
-    { label: isClickThrough ? 'Unlock (Interactive)' : 'Lock (Click-through)', click: toggleClickThrough },
-    { type: 'separator' },
-    { label: 'Opacity', submenu: [
-      { label: '100%', click: () => setOpacity(1.0) },
-      { label: '90%', click: () => setOpacity(0.90) },
-      { label: '80%', click: () => setOpacity(0.80) },
-      { label: '70%', click: () => setOpacity(0.70) },
-      { label: '60%', click: () => setOpacity(0.60) },
-      { label: '50%', click: () => setOpacity(0.50) },
-    ]},
-    { type: 'separator' },
-    { label: 'Reset Position', click: () => {
-      if (win) win.setBounds({ x: 100, y: 100, width: 420, height: 300 });
-    }},
-    { label: 'Quit', click: () => app.quit() },
+    { label: visible ? '隐藏' : '显示', click: toggleVisibility },
+    { label: '退出', click: () => app.quit() },
   ]);
   tray.setContextMenu(menu);
 }
@@ -130,7 +120,7 @@ function createTray() {
   } catch {
     tray = new Tray(nativeImage.createEmpty());
   }
-  tray.setToolTip('ConCat');
+  tray.setToolTip('ConCat — 单击显示/隐藏，右键：隐藏、退出');
   updateTrayMenu();
   tray.on('click', toggleVisibility);
 }
