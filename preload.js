@@ -1,6 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+/** 与主进程 !app.isPackaged 一致：仅未打包（electron . / 开发）为 true */
+const layoutEditorEnabled = process.defaultApp === true;
+
 contextBridge.exposeInMainWorld('overlay', {
+  layoutEditorEnabled,
   onClickThroughChanged: (cb) => ipcRenderer.on('click-through-changed', (_e, val) => cb(val)),
   setClickThrough: (val) => ipcRenderer.send('set-click-through', val),
   getClickThrough: () => ipcRenderer.invoke('get-click-through'),

@@ -1,10 +1,19 @@
 /** ConCat 主进程 — 当前发行线：PlayStation DS4 皮肤；Xbox / Switch / 键盘专版后续可拆分为独立构建或运行时切换。 */
-const { app, BrowserWindow, globalShortcut, Tray, Menu, nativeImage, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, Menu, nativeImage, ipcMain, screen, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const STORE_PATH = path.join(app.getPath('userData'), 'settings.json');
-const DEFAULTS = { bounds: { width: 520, height: 450 }, opacity: 0.92, clickThrough: false, alwaysOnTop: true, scale: 1.0, operationCount: 0 };
+const DEFAULTS = {
+  bounds: { width: 520, height: 450 },
+  opacity: 0.92,
+  clickThrough: false,
+  alwaysOnTop: true,
+  scale: 1.0,
+  operationCount: 0,
+  /** 已展示过「快捷方式 / 任务栏」说明（仅打包版首次启动） */
+  launchShortcutsPromptDone: false,
+};
 
 function loadStore() {
   try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) }; }
@@ -65,6 +74,7 @@ function createWindow() {
       }
     } catch (_) {}
     win.webContents.send('click-through-changed', isClickThrough);
+    showLaunchShortcutsPromptOnce();
   });
 
   win.on('moved', saveBounds);
@@ -114,6 +124,59 @@ function updateTrayMenu() {
   tray.setContextMenu(menu);
 }
 
+/** 桌面尚无 ConCat.lnk 时创建，便于退出后再启动 */
+function createDesktopShortcutIfMissing() {
+  if (process.platform !== 'win32') return;
+  try {
+    const linkPath = path.join(app.getPath('desktop'), 'ConCat.lnk');
+    if (fs.existsSync(linkPath)) return;
+    shell.writeShortcutLink(linkPath, 'create', {
+      target: process.execPath,
+      cwd: path.dirname(process.execPath),
+      description: 'ConCat 手柄覆盖层',
+      icon: process.execPath,
+      iconIndex: 0,
+    });
+  } catch (e) {
+    console.error('ConCat: create desktop shortcut failed', e);
+  }
+}
+
+function showLaunchShortcutsPromptOnce() {
+  if (!app.isPackaged || store.get('launchShortcutsPromptDone')) return;
+  if (!win || win.isDestroyed()) return;
+  setTimeout(() => {
+    if (!win || win.isDestroyed()) return;
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'ConCat · 再次启动与快捷方式',
+      message: '退出后可通过以下方式重新打开：',
+      detail:
+        '• 开始菜单中的「ConCat」快捷方式（安装向导里可勾选是否加入开始菜单/桌面）\n' +
+        '• 安装文件夹内的 ConCat.exe（可点击下方按钮打开该文件夹）\n\n' +
+        '固定到任务栏：请先通过开始菜单或桌面启动一次，在任务栏图标上右键 → 「固定到任务栏」。\n' +
+        '（Windows 不允许程序自动替你固定到任务栏，需手动操作一次。）',
+      buttons: ['打开安装文件夹', '确定'],
+      defaultId: 1,
+      cancelId: 1,
+      checkboxLabel: '在桌面创建 ConCat 快捷方式（若还没有）',
+      checkboxChecked: true,
+    }).then(({ response, checkboxChecked }) => {
+      if (checkboxChecked) createDesktopShortcutIfMissing();
+      if (response === 0) {
+        try {
+          shell.showItemInFolder(process.execPath);
+        } catch (e) {
+          console.error('ConCat: showItemInFolder failed', e);
+        }
+      }
+      store.set('launchShortcutsPromptDone', true);
+    }).catch(() => {
+      store.set('launchShortcutsPromptDone', true);
+    });
+  }, 600);
+}
+
 function createTray() {
   try {
     tray = new Tray(createTrayIcon());
@@ -125,15 +188,20 @@ function createTray() {
   tray.on('click', toggleVisibility);
 }
 
+/** 布局编辑器仅开发态可用；打包后 app.isPackaged 为 true，不注册 F2、不暴露 IPC */
+const LAYOUT_EDITOR_ENABLED = !app.isPackaged;
+
 app.whenReady().then(() => {
   createWindow();
   createTray();
 
   globalShortcut.register('Ctrl+Shift+G', toggleClickThrough);
   globalShortcut.register('Ctrl+Shift+H', toggleVisibility);
-  if (!globalShortcut.register('F2', () => {
-    if (win && !win.isDestroyed()) win.webContents.send('toggle-layout-editor');
-  })) console.warn('ConCat: F2 global shortcut not registered (may be in use by another app)');
+  if (LAYOUT_EDITOR_ENABLED) {
+    if (!globalShortcut.register('F2', () => {
+      if (win && !win.isDestroyed()) win.webContents.send('toggle-layout-editor');
+    })) console.warn('ConCat: F2 global shortcut not registered (may be in use by another app)');
+  }
 
   try {
     const { spawn } = require('child_process');

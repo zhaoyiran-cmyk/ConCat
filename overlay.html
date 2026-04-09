@@ -17,7 +17,14 @@ body.ct-through .scene{pointer-events:none}
 body.ct-through .scene img.editable,
 body.ct-through .scene .op-counter.editable{pointer-events:auto!important}
 body.ct-through #noGp{pointer-events:auto}
-.det-badge{position:absolute;top:4px;left:6px;font-size:8px;font-weight:700;color:#888;letter-spacing:.04em;opacity:.6;pointer-events:none;z-index:200}
+/* 锁定穿透时 .scene 为 pointer-events:none，否则收不到 mousedown → 无法拖窗；顶部条专门用于命中与拖动 */
+.drag-hit-top{
+  position:fixed;left:0;right:0;top:0;height:36px;z-index:400;
+  pointer-events:none;cursor:grab;
+}
+body.ct-through .drag-hit-top{pointer-events:auto}
+body.ct-through.dragging .drag-hit-top{cursor:grabbing}
+.det-badge{position:absolute;top:4px;left:6px;font-size:8px;font-weight:700;color:#888;letter-spacing:.04em;opacity:.6;pointer-events:none;z-index:450}
 
 .no-gp{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -189,6 +196,7 @@ body.ct-through #noGp{pointer-events:auto}
 </style>
 </head>
 <body>
+<div id="dragHitTop" class="drag-hit-top" title="锁定穿透时：拖动顶部区域可移动窗口"></div>
 <div class="det-badge" id="detBadge"></div>
 
 <div id="noGp" class="no-gp">
@@ -199,8 +207,10 @@ body.ct-through #noGp{pointer-events:auto}
   <div class="hint" style="opacity:.78">加键: 方向键/小键盘8426=右摇杆 · VBNM=面键备用 · FC=肩键备用 · 数字12=扳机备用 · []=L3R3备用 · 斜杠/引号/重音符=Share/Option/Home · P=触摸板 · 空格=Home</div>
   <div class="hint" style="opacity:.65">桌面版：按键由系统键盘钩子驱动（与焦点无关）；插着手柄时键盘会与手柄显示合并。</div>
   <div class="hint" style="margin-top:2px;opacity:.85">当前发行线：<b style="color:#f0a0b8">索尼 DS4 / PlayStation 布局</b> · Xbox / Switch / 键盘专版规划中</div>
+  <div id="layoutEditorHints">
   <div class="hint" style="margin-top:4px;color:#f0a0b8">F2 = 布局编辑器（全局快捷键，无需点中窗口）</div>
   <div class="hint" style="margin-top:2px;opacity:.75">有输入后显示「操作 N 次」；<strong>F2</strong> 可选中「操作计数器」拖动位置，滚轮/Ctrl+方向键调宽高（字号随高度变化）</div>
+  </div>
 </div>
 
 <div class="ctx-menu" id="ctxMenu">
@@ -297,6 +307,14 @@ const scene=document.getElementById('scene');
 const noGp=document.getElementById('noGp');
 const detBadge=document.getElementById('detBadge');
 const ctxMenu=document.getElementById('ctxMenu');
+
+/** 与 preload `layoutEditorEnabled` / 主进程 `!app.isPackaged` 一致；便携版/安装包为 false */
+const LAYOUT_EDITOR_ENABLED = !!(window.overlay && window.overlay.layoutEditorEnabled);
+(function hideLayoutEditorHints(){
+  if(LAYOUT_EDITOR_ENABLED)return;
+  const h=document.getElementById('layoutEditorHints');
+  if(h)h.style.display='none';
+})();
 
 function mk(id,src,pos,cls,extra){
   const img=document.createElement('img');
@@ -511,6 +529,7 @@ let lastClientX=0,lastClientY=0;
 function noGpVisible(){try{return getComputedStyle(noGp).display!=='none'}catch(_){return false}}
 function isClickThroughInteractiveTarget(el){
   if(!el||el===document.body||el===document.documentElement)return false;
+  if(el.closest('#dragHitTop'))return true;
   if(el.closest('.editor-panel.show'))return true;
   if(ctxMenu.classList.contains('show')&&el.closest('#ctxMenu'))return true;
   if(noGpVisible()&&el.closest('#noGp'))return true;
@@ -567,13 +586,12 @@ ctxMenu.addEventListener('mouseup',e=>e.stopPropagation());
 document.addEventListener('wheel',e=>{
   if(e.ctrlKey)e.preventDefault();
 },{passive:false});
-// Left-click拖窗：preventDefault 减少误触系统缩放/拖影；窗口尺寸仅由右键菜单倍率（主进程 setBounds）改变
+// 左键拖窗（主进程 setBounds）；勿对 mousedown preventDefault，否则部分环境下 IPC 拖窗失效
 document.addEventListener('mousedown',e=>{
   if(e.button!==0||editorOn)return;
   if(ctxMenu.contains(e.target))return;
   if(e.target.closest('.editor-panel'))return;
   if(ctxMenu.classList.contains('show')){ctxMenu.classList.remove('show');return}
-  e.preventDefault();
   winDragging=true;document.body.classList.add('dragging');
   if(window.overlay)window.overlay.startDrag(e.screenX,e.screenY);
 });
@@ -714,6 +732,7 @@ let kbActive=false;
 document.addEventListener('keydown',e=>{
   if(e.repeat)return;
   if(e.code==='F2'){
+    if(!LAYOUT_EDITOR_ENABLED)return;
     if(window.overlay)return;
     e.preventDefault();toggleEditor();return;
   }
@@ -793,7 +812,7 @@ if(window.overlay){
     if(code)handleGameKeyUpBody(code);
     typeKeyUp(keycode);
   });
-  window.overlay.onToggleLayoutEditor(()=>toggleEditor());
+  if(window.overlay.layoutEditorEnabled)window.overlay.onToggleLayoutEditor(()=>toggleEditor());
 }
 
 const HAND_LIFT=30;
@@ -941,6 +960,7 @@ const ED_NAMES={
 };
 
 function toggleEditor(){
+  if(!LAYOUT_EDITOR_ENABLED)return;
   prevInputSnap=null;
   editorOn=!editorOn;
   edPanel.classList.toggle('show',editorOn);
